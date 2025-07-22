@@ -94,10 +94,6 @@
   }
 
   that._getBackgroundPage = function (){
-    console.log('[DEBUG] _getBackgroundPage called');
-    console.log('[DEBUG] _ available:', typeof _);
-    console.log('[DEBUG] Backbone available:', typeof Backbone);
-    console.log('[DEBUG] Backbone.Events available:', typeof Backbone.Events);
     
     // Manifest V3 - create a proxy object for service worker communication
     var dispatcher = _.extend({}, Backbone.Events);
@@ -142,7 +138,7 @@
       openStream: function (type) {
         if (type == "livestreamer") {
           // For livestreamer, just log for now since it requires complex setup
-          console.log('[DEBUG] Livestreamer not implemented in MV3');
+          console.log('Livestreamer not supported in Manifest V3');
         } else {
           var url = this.getStreamURL(type);
           utils.tabs.create({ url: url });
@@ -193,17 +189,14 @@
       
       initialize: function() {
         var self = this;
-        console.log('[DEBUG] UserModel initializing...');
         // Event listeners will be set up after backgroundProxy is created
       },
       
       setupEventListeners: function(twitchApi) {
         var self = this;
-        console.log('[DEBUG] UserModel: setting up event listeners');
         
         // Check if user is already authorized
         twitchApi.isAuthorized().then(function(authorized) {
-          console.log('[DEBUG] Initial auth check result:', authorized);
           if (authorized) {
             self.set("authenticated", true);
             self.populateUserInfo();
@@ -212,13 +205,11 @@
         
         // Listen for authorize events from twitchApi
         twitchApi.on("authorize", function() {
-          console.log('[DEBUG] UserModel: authorize event received');
           self.set("authenticated", true);
           self.populateUserInfo();
         });
         
         twitchApi.on("revoke", function() {
-          console.log('[DEBUG] UserModel: revoke event received');
           self.set({
             "authenticated": false,
             "logo": self.defaults.logo,
@@ -229,22 +220,16 @@
       
       populateUserInfo: function() {
         var self = this;
-        console.log('[DEBUG] UserModel: populateUserInfo called');
         
         // Send message to service worker to get user info
         chrome.runtime.sendMessage({
           type: 'GET_USER_INFO'
         }, function(response) {
-          console.log('[DEBUG] GET_USER_INFO response:', response);
           
           if (response && response.status === 'ok' && response.user) {
             self.set({
               "logo": response.user.profile_image_url || self.defaults.logo,
               "name": response.user.display_name || response.user.login || ""
-            });
-            console.log('[DEBUG] User info updated:', {
-              name: response.user.display_name,
-              logo: response.user.profile_image_url
             });
           }
         });
@@ -255,14 +240,12 @@
       },
       
       login: function() {
-        console.log('[DEBUG] UserModel.login() called');
         if (this.twitchApi) {
           this.twitchApi.authorize();
         }
       },
       
       logout: function() {
-        console.log('[DEBUG] UserModel.logout() called');
         if (this.twitchApi) {
           this.twitchApi.revoke();
         }
@@ -283,7 +266,6 @@
           // Check if showBadge setting is enabled
           if (backgroundProxy.settings && backgroundProxy.settings.get("showBadge") && 
               backgroundProxy.settings.get("showBadge").get("value")) {
-            console.log('[DEBUG] Badge count changed to:', self.get("count"));
             // Send STREAMS_UPDATED message to service worker
             chrome.runtime.sendMessage({
               type: 'STREAMS_UPDATED',
@@ -324,19 +306,14 @@
       // Proxy for twitchApi - make it compatible with existing popup code
       twitchApi: _.extend({
         isAuthorized: function() {
-          console.log('[DEBUG] twitchApi.isAuthorized() called');
           return new Promise((resolve) => {
             chrome.runtime.sendMessage({ type: 'IS_AUTHORIZED' }, (response) => {
-              console.log('[DEBUG] IS_AUTHORIZED response:', JSON.stringify(response, null, 0));
               resolve(response.authorized);
             });
           });
         },
         authorize: function() {
-          console.log('[DEBUG] twitchApi.authorize() called, sending AUTHORIZE message to service worker');
-          console.log('[DEBUG] this object in authorize - has trigger method:', typeof this.trigger);
           chrome.runtime.sendMessage({ type: 'AUTHORIZE' }, (response) => {
-            console.log('[DEBUG] AUTHORIZE message response:', JSON.stringify(response, null, 0));
           });
           
           // After sending authorize message, we should listen for completion
@@ -345,32 +322,23 @@
           const maxPolls = 30; // Poll for 30 seconds max
           const pollForAuth = () => {
             pollCount++;
-            console.log('[DEBUG] Polling for authorization... (attempt ' + pollCount + '/' + maxPolls + ')');
-            console.log('[DEBUG] this context in poll - has trigger method:', typeof this.trigger);
             this.isAuthorized().then((authorized) => {
-              console.log('[DEBUG] Polling auth status result:', JSON.stringify(authorized, null, 0));
               if (authorized) {
-                console.log('[DEBUG] Authorization successful! Triggering authorize event');
-                console.log('[DEBUG] About to call this.trigger with:', JSON.stringify('authorize', null, 0));
                 this.trigger('authorize');
-                console.log('[DEBUG] authorize event triggered');
                 
                 // Update stream collections after authorization
                 if (backgroundProxy.following && backgroundProxy.following.update) {
-                  console.log('[DEBUG] Triggering following streams update after auth');
                   backgroundProxy.following.update();
                 } else {
-                  console.log('[DEBUG] backgroundProxy.following or update not available:', JSON.stringify({following: !!backgroundProxy.following, update: !!(backgroundProxy.following && backgroundProxy.following.update)}, null, 0));
                 }
               } else if (pollCount < maxPolls) {
                 // Keep polling for a short time
-                console.log('[DEBUG] Auth not complete yet, continuing to poll... (attempt ' + pollCount + '/' + maxPolls + ')');
                 setTimeout(pollForAuth, 1000);
               } else {
-                console.log('[DEBUG] Max polling attempts reached, giving up');
+                console.log('Authentication timeout - please try again');
               }
             }).catch((error) => {
-              console.error('[DEBUG] Error polling auth status:', JSON.stringify(error, null, 0));
+              console.error('Error during authentication:', error.message);
               if (pollCount < maxPolls) {
                 setTimeout(pollForAuth, 1000);
               }
@@ -381,9 +349,7 @@
           setTimeout(pollForAuth, 2000);
         },
         revoke: function() {
-          console.log('[DEBUG] twitchApi.revoke() called');
           chrome.runtime.sendMessage({ type: 'REVOKE' }, (response) => {
-            console.log('[DEBUG] REVOKE response:', JSON.stringify(response, null, 0));
           });
         },
         // Add other properties that popup code expects
@@ -401,22 +367,16 @@
       topstreams: _.extend(new Backbone.Collection(), {
         model: StreamModel,
         update: function() {
-          console.log('[DEBUG] topstreams collection update() called');
           chrome.runtime.sendMessage({ 
             type: 'GET_TOP_STREAMS' 
           }, (response) => {
-            console.log('[DEBUG] GET_TOP_STREAMS response:', JSON.stringify(response, null, 0));
             
             if (response && response.status === 'ok' && response.streams) {
-              console.log('[DEBUG] Adding', response.streams.length, 'top streams to collection');
               this.reset(response.streams);
-              console.log('[DEBUG] Top streams collection after reset:', this.length, 'streams');
             } else {
-              console.log('[DEBUG] No top streams in response or error occurred');
               this.reset([]);
             }
             
-            console.log('[DEBUG] Top streams collection reset completed');
           });
         }
       }),
@@ -425,9 +385,7 @@
         model: StreamModel,
         query: null,
         update: function() {
-          console.log('[DEBUG] search collection update() called with query:', this.query);
           if (!this.query) {
-            console.log('[DEBUG] No search query provided');
             this.reset([]);
             return;
           }
@@ -436,39 +394,28 @@
             type: 'SEARCH_STREAMS',
             query: this.query
           }, (response) => {
-            console.log('[DEBUG] SEARCH_STREAMS response:', JSON.stringify(response, null, 0));
             
             if (response && response.status === 'ok' && response.streams) {
-              console.log('[DEBUG] Adding', response.streams.length, 'search results to collection');
               this.reset(response.streams);
-              console.log('[DEBUG] Search collection after reset:', this.length, 'results');
             } else {
-              console.log('[DEBUG] No search results in response or error occurred');
               this.reset([]);
             }
             
-            console.log('[DEBUG] Search collection reset completed');
           });
         }
       }),
       games: _.extend(new Backbone.Collection(), {
         update: function() {
-          console.log('[DEBUG] games collection update() called');
           chrome.runtime.sendMessage({ 
             type: 'GET_TOP_GAMES' 
           }, (response) => {
-            console.log('[DEBUG] GET_TOP_GAMES response:', JSON.stringify(response, null, 0));
             
             if (response && response.status === 'ok' && response.games) {
-              console.log('[DEBUG] Adding', response.games.length, 'games to collection');
               this.reset(response.games);
-              console.log('[DEBUG] Games collection after reset:', this.length, 'games');
             } else {
-              console.log('[DEBUG] No games in response or error occurred');
               this.reset([]);
             }
             
-            console.log('[DEBUG] Games collection reset completed');
           });
         }
       }),
@@ -764,7 +711,6 @@
         // Load stored settings and apply them
         chrome.storage.local.get(['settings'], (result) => {
           const storedSettings = result.settings || [];
-          console.log('[DEBUG] Loaded stored settings:', storedSettings.length, 'items');
           
           // Apply stored values to existing models
           settingsProxy.forEach(function(control) {
@@ -773,7 +719,6 @@
             });
             
             if (saved && saved.hasOwnProperty("value")) {
-              console.log('[DEBUG] Restoring setting:', saved.id, '=', saved.value);
               control.set("value", saved.value);
             }
           });
@@ -784,21 +729,18 @@
         
         // Listen for changes and save to storage
         settingsProxy.on("change", function() {
-          console.log('[DEBUG] Settings changed, saving to storage');
           settingsProxy.saveToStorage();
         });
         
         // Listen for showBadge setting changes
         settingsProxy.on("change", function(model) {
           if (model.get("id") === "showBadge") {
-            console.log('[DEBUG] showBadge setting changed to:', model.get("value"));
             if (backgroundProxy.badge) {
               backgroundProxy.badge.onShowBadgeChange(model.get("value"));
             }
           }
         });
         
-        console.log('[DEBUG] Settings collection initialized with', settingsProxy.length, 'settings');
         return settingsProxy;
       })(),
       contributors: new Backbone.Collection(),
@@ -810,19 +752,15 @@
         game: null,
         gameid: null,
         initialize: function() {
-          console.log('[DEBUG] gameStreams collection initialized');
           // Listen for gameLobby:change events
           dispatcher.on("gameLobby:change", function(gameName, gameId) {
-            console.log('[DEBUG] gameStreams received gameLobby:change event - game:', gameName, 'id:', gameId);
             this.game = gameName;
             this.gameid = gameId;
             this.update();
           }.bind(this));
         },
         update: function() {
-          console.log('[DEBUG] gameStreams collection update() called for game:', this.game, 'id:', this.gameid);
           if (!this.gameid) {
-            console.log('[DEBUG] No game ID available for gameStreams update');
             return;
           }
           
@@ -830,18 +768,13 @@
             type: 'GET_GAME_STREAMS',
             gameId: this.gameid
           }, (response) => {
-            console.log('[DEBUG] GET_GAME_STREAMS response:', JSON.stringify(response, null, 0));
             
             if (response && response.status === 'ok' && response.streams) {
-              console.log('[DEBUG] Adding', response.streams.length, 'game streams to collection');
               this.reset(response.streams);
-              console.log('[DEBUG] Game streams collection after reset:', this.length, 'streams');
             } else {
-              console.log('[DEBUG] No game streams in response or error occurred');
               this.reset([]);
             }
             
-            console.log('[DEBUG] Game streams collection reset completed');
           });
         }
       }),
@@ -852,34 +785,26 @@
         initialize: function() {
           // Listen for collection changes and update badge count
           this.on("add update remove reset", function() {
-            console.log('[DEBUG] Following collection changed, updating badge count:', this.length);
             backgroundProxy.badge.set("count", this.length);
           });
         },
         
         update: function() {
-          console.log('[DEBUG] following collection update() called');
-          console.log('[DEBUG] this in update - has trigger method:', typeof this.trigger);
           // In the real app, this would make API calls to get followed streams
           // For now, we'll send a message to service worker to handle this
           chrome.runtime.sendMessage({ 
             type: 'GET_FOLLOWED_STREAMS' 
           }, (response) => {
-            console.log('[DEBUG] GET_FOLLOWED_STREAMS response:', JSON.stringify(response, null, 0));
             
             // Parse response and add streams to collection
             if (response && response.status === 'ok' && response.streams) {
-              console.log('[DEBUG] Adding', response.streams.length, 'streams to collection');
               
               // Clear existing models and add new ones - this should automatically trigger render
               this.reset(response.streams);
-              console.log('[DEBUG] Collection after reset:', this.length, 'streams');
             } else {
-              console.log('[DEBUG] No streams in response or error occurred');
               this.reset([]); // Clear collection if no streams
             }
             
-            console.log('[DEBUG] Collection reset completed, should trigger render automatically');
           });
         }
       }),
@@ -888,7 +813,6 @@
       gameLobby: _.extend(new Backbone.Model(), {
         lastChange: 0,
         change: function(gameName) {
-          console.log('[DEBUG] gameLobby.change called with gameName:', gameName);
           
           // Find game in games or followedgames collections
           var newGame = null;
@@ -905,25 +829,20 @@
           }
           
           if (newGame) {
-            console.log('[DEBUG] Found game for gameLobby:', gameName);
             var currentTime = Date.now();
             var shouldUpdate = !this.get('game') || 
                              (newGame.get('name') !== this.get('game').name) || 
                              (currentTime - this.lastChange) > 5 * 60 * 1000;
             
             if (shouldUpdate) {
-              console.log('[DEBUG] Updating gameLobby model');
               this.set(newGame.toJSON ? newGame.toJSON() : newGame.attributes);
               this.lastChange = currentTime;
               
               // Trigger dispatcher events for game lobby collections to update
               var gameId = newGame.get ? newGame.get('id') : newGame.attributes.id;
-              console.log('[DEBUG] Triggering gameLobby:change event with gameName:', gameName, 'gameId:', gameId);
               dispatcher.trigger("gameLobby:change", gameName, gameId);
-              console.log('[DEBUG] gameLobby model updated');
             }
           } else {
-            console.log('[DEBUG] Game not found in collections:', gameName);
           }
         }
       }),
@@ -947,7 +866,6 @@
     // Listen for background stream updates from service worker
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.type === 'BACKGROUND_STREAMS_UPDATED') {
-        console.log('[DEBUG] Received background streams update, count:', message.streamCount);
         
         // Update badge count to match service worker
         if (backgroundProxy.badge) {
@@ -956,12 +874,11 @@
         
         // Optionally update following collection if popup is open
         if (message.streams && backgroundProxy.following) {
-          console.log('[DEBUG] Syncing following collection with background data');
           backgroundProxy.following.reset(message.streams);
         }
       } else if (message.type === 'AUTH_EXPIRED') {
         // Handle token expiration from service worker
-        console.log('[DEBUG] Received auth expiration notification from service worker');
+        console.log('Authentication expired - please log in again');
         
         // Update user model to reflect expired authentication
         if (backgroundProxy.user) {
@@ -970,7 +887,6 @@
             "logo": backgroundProxy.user.defaults.logo,
             "name": ""
           });
-          console.log('[DEBUG] User model updated - authentication expired');
         }
         
         // Clear following collection since user is no longer authenticated
@@ -985,27 +901,7 @@
       }
     });
     
-    console.log('[DEBUG] Created backgroundProxy with collections count:', {
-      games: backgroundProxy.games ? backgroundProxy.games.length : 'undefined',
-      gameStreams: backgroundProxy.gameStreams ? 'initialized' : 'undefined',
-      following: backgroundProxy.following ? backgroundProxy.following.length : 'undefined',
-      dispatcher: typeof backgroundProxy.dispatcher
-    });
-    console.log('[DEBUG] twitchApi proxy has methods:', {
-      isAuthorized: typeof backgroundProxy.twitchApi.isAuthorized,
-      authorize: typeof backgroundProxy.twitchApi.authorize,
-      trigger: typeof backgroundProxy.twitchApi.trigger
-    });
     
-    // Log collection lengths only to avoid circular references
-    console.log('[DEBUG] Collection status:', {
-      notifications: backgroundProxy.notifications.length,
-      games: backgroundProxy.games.length,
-      following: backgroundProxy.following.length,
-      gameStreams: backgroundProxy.gameStreams.length,
-      topstreams: backgroundProxy.topstreams.length,
-      search: backgroundProxy.search.length
-    });
     
     return backgroundProxy;
   }

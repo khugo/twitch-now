@@ -2,14 +2,11 @@
 // Contains only essential background functionality
 
 console.log('[SW] Service Worker script loaded');
-console.log('[SW] Self:', JSON.stringify(self, null, 0));
-console.log('[SW] Chrome available:', typeof chrome);
 
 // Service worker global context
 const bgApp = {};
 bgApp.notificationIds = {};
 
-console.log('[SW] bgApp initialized:', JSON.stringify(bgApp, null, 0));
 
 // Storage helpers using chrome.storage.local (async)
 bgApp.get = async function(key) {
@@ -157,12 +154,10 @@ bgApp.sendNotification = async function(streamList) {
 // Basic stream monitoring
 bgApp.checkForNewStreams = async function() {
   try {
-    console.log('[SW] Background check for new streams starting...');
     
     // Get access token first
     const accessToken = await twitchOauth.getAccessToken();
     if (!accessToken) {
-      console.log('[SW] No access token available for background check');
       return;
     }
     
@@ -178,7 +173,6 @@ bgApp.checkForNewStreams = async function() {
       }
       
       const streamCount = data && data.data ? data.data.length : 0;
-      console.log('[SW] Background check found', streamCount, 'live followed streams');
       
       // Check if showBadge setting is enabled
       const settings = await bgApp.get('settings') || [];
@@ -187,10 +181,8 @@ bgApp.checkForNewStreams = async function() {
       
       if (showBadge) {
         bgApp.setBadge(streamCount);
-        console.log('[SW] Badge updated to:', streamCount);
       } else {
         bgApp.clearBadge();
-        console.log('[SW] Badge cleared (showBadge disabled)');
       }
       
       // Optionally send message to popup if it's open
@@ -201,7 +193,6 @@ bgApp.checkForNewStreams = async function() {
       }, (response) => {
         if (chrome.runtime.lastError) {
           // Popup probably closed, ignore the error
-          console.log('[SW] Popup not available for background update notification');
         }
       });
     });
@@ -222,7 +213,6 @@ bgApp.startPeriodicChecking = function() {
 // Centralized auth error handler
 bgApp.handleAuthError = function(error) {
   if (error && error.message && error.message.includes('401')) {
-    console.log('[SW] Token expired, handling auth expiration...');
     
     // Clear the token
     if (typeof twitchOauth !== 'undefined') {
@@ -237,7 +227,7 @@ bgApp.handleAuthError = function(error) {
       type: 'AUTH_EXPIRED'
     }, (response) => {
       if (chrome.runtime.lastError) {
-        console.log('[SW] Popup not available for auth expiration notification');
+        // Popup not available
       }
     });
     
@@ -247,7 +237,6 @@ bgApp.handleAuthError = function(error) {
 };
 
 // Initialize OAuth adapter
-console.log('[SW] Creating minimal twitchOauth adapter');
 const twitchOauth = OAuth2.addAdapter({
   id: 'twitch',
   opts: constants.twitchApi,
@@ -256,44 +245,33 @@ const twitchOauth = OAuth2.addAdapter({
     url: "https://api.twitch.tv/kraken/oauth2/token"
   }
 });
-console.log('[SW] twitchOauth created:', typeof twitchOauth);
 
 // Initialize TwitchApi instance
-console.log('[SW] Creating TwitchApi instance');
 const twitchApi = new TwitchApi(constants.twitchApi.client_id);
-console.log('[SW] TwitchApi instance created:', typeof twitchApi);
 
 // Initialize service worker
 bgApp.init = function() {
-  console.log('[SW] Twitch Now service worker starting...');
-  console.log('[SW] Initializing badge, notifications, and periodic checking');
+  console.log('[SW] Service worker initializing...');
   
   // Don't clear badge immediately - let the stream check determine correct state
   bgApp.bindNotificationListeners();
   bgApp.startPeriodicChecking();
   
   // Perform immediate check for live streams on startup
-  console.log('[SW] Performing immediate check for live streams...');
   bgApp.checkForNewStreams();
-  
-  console.log('[SW] Service worker initialization complete');
 };
 
 // Event listeners - must be registered at top level
-console.log('[SW] Registering event listeners...');
 
 chrome.runtime.onStartup.addListener(() => {
-  console.log('[SW] onStartup fired');
   bgApp.init();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[SW] onInstalled fired');
   bgApp.init();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  console.log('[SW] Alarm fired:', JSON.stringify(alarm, null, 0));
   if (alarm.name === 'checkStreams') {
     bgApp.checkForNewStreams();
   }
@@ -301,7 +279,6 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Message handling from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[SW] Message received:', JSON.stringify(message, null, 0));
   switch (message.type) {
     case 'GET_LIVE_STREAMS':
       // Popup is requesting current stream data
@@ -335,80 +312,48 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'IS_AUTHORIZED':
       // Check if OAuth is authorized
-      console.log('[SW] IS_AUTHORIZED request received');
-      console.log('[SW] twitchOauth available:', typeof twitchOauth);
       if (typeof twitchOauth !== 'undefined') {
-        console.log('[SW] Calling twitchOauth.isAuthorized()');
         twitchOauth.isAuthorized().then(authorized => {
-          console.log('[SW] twitchOauth.isAuthorized() result:', JSON.stringify(authorized, null, 0));
           sendResponse({ authorized: authorized });
         }).catch((error) => {
-          console.log('[SW] twitchOauth.isAuthorized() error:', JSON.stringify(error, null, 0));
           sendResponse({ authorized: false });
         });
       } else {
-        console.log('[SW] twitchOauth not available, returning false');
         sendResponse({ authorized: false });
       }
       return true; // Keep message channel open for async response
       
     case 'AUTHORIZE':
       // Trigger OAuth authorization
-      console.log('[SW] AUTHORIZE message received');
-      console.log('[SW] twitchOauth available:', typeof twitchOauth);
-      console.log('[SW] twitchOauth object:', JSON.stringify(twitchOauth, null, 0));
       if (typeof twitchOauth !== 'undefined') {
-        console.log('[SW] Calling twitchOauth.authorize() with callback');
         twitchOauth.authorize((error, tokenData) => {
-          console.log('[SW] twitchOauth.authorize() callback called');
-          console.log('[SW] error:', JSON.stringify(error, null, 0));
-          console.log('[SW] tokenData:', JSON.stringify(tokenData, null, 0));
-          if (!error && tokenData) {
-            console.log('[SW] Authorization successful, token saved');
-          } else {
-            console.log('[SW] Authorization failed or cancelled');
-          }
+          // Authorization complete
         });
-        console.log('[SW] twitchOauth.authorize() call completed');
-      } else {
-        console.log('[SW] twitchOauth not available - OAuth not initialized');
       }
       break;
       
     case 'REVOKE':
       // Revoke OAuth authorization
-      console.log('[SW] REVOKE message received');
       if (typeof twitchOauth !== 'undefined') {
-        console.log('[SW] Calling twitchOauth.removeData()');
         twitchOauth.removeData();
-        console.log('[SW] OAuth data removed');
-      } else {
-        console.log('[SW] twitchOauth not available for revoke');
       }
       break;
       
     case 'GET_FOLLOWED_STREAMS':
       // Handle followed streams request
-      console.log('[SW] GET_FOLLOWED_STREAMS message received');
-      
-      // First get the OAuth token and set it on TwitchApi
       twitchOauth.getAccessToken().then(accessToken => {
-        console.log('[SW] Retrieved access token:', accessToken ? 'found' : 'not found');
         if (accessToken) {
           twitchApi.setToken(accessToken);
-          console.log('[SW] Set token on TwitchApi, calling getFollowedStreams');
           
           // Use the real TwitchApi to get followed streams
           twitchApi.getFollowedStreams((error, data) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
-              console.log('[SW] GET_FOLLOWED_STREAMS error:', JSON.stringify(error, null, 0));
               sendResponse({
                 status: 'error',
                 error: error.message || 'Failed to get followed streams'
               });
             } else {
-              console.log('[SW] GET_FOLLOWED_STREAMS success, streams count:', data && data.data ? data.data.length : 0);
               sendResponse({
                 status: 'ok',
                 streams: data && data.data ? data.data : [],
@@ -417,14 +362,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           });
         } else {
-          console.log('[SW] No access token available');
           sendResponse({
             status: 'error',
             error: 'Not authorized - no access token'
           });
         }
       }).catch(error => {
-        console.log('[SW] Error getting access token:', JSON.stringify(error, null, 0));
         sendResponse({
           status: 'error',
           error: 'Failed to get access token'
@@ -435,26 +378,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'GET_TOP_GAMES':
       // Handle top games request
-      console.log('[SW] GET_TOP_GAMES message received');
-      
-      // Get OAuth token and call TwitchApi
       twitchOauth.getAccessToken().then(accessToken => {
-        console.log('[SW] Retrieved access token for games:', accessToken ? 'found' : 'not found');
         if (accessToken) {
           twitchApi.setToken(accessToken);
-          console.log('[SW] Set token on TwitchApi, calling getTopGames');
           
           // Use the TwitchApi to get top games
           twitchApi.getTopGames((error, data) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
-              console.log('[SW] GET_TOP_GAMES error:', JSON.stringify(error, null, 0));
               sendResponse({
                 status: 'error',
                 error: error.message || 'Failed to get top games'
               });
             } else {
-              console.log('[SW] GET_TOP_GAMES success, games count:', data && data.data ? data.data.length : 0);
               sendResponse({
                 status: 'ok',
                 games: data && data.data ? data.data : [],
@@ -463,14 +399,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           });
         } else {
-          console.log('[SW] No access token available for games');
           sendResponse({
             status: 'error',
             error: 'Not authorized - no access token'
           });
         }
       }).catch(error => {
-        console.log('[SW] Error getting access token for games:', JSON.stringify(error, null, 0));
         sendResponse({
           status: 'error',
           error: 'Failed to get access token'
@@ -481,26 +415,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'GET_GAME_STREAMS':
       // Handle game streams request
-      console.log('[SW] GET_GAME_STREAMS message received for gameId:', message.gameId);
-      
-      // Get OAuth token and call TwitchApi
       twitchOauth.getAccessToken().then(accessToken => {
-        console.log('[SW] Retrieved access token for game streams:', accessToken ? 'found' : 'not found');
         if (accessToken) {
           twitchApi.setToken(accessToken);
-          console.log('[SW] Set token on TwitchApi, calling getGameStreams');
           
           // Use the TwitchApi to get streams for the game
           twitchApi.getGameStreams(message.gameId, (error, data) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
-              console.log('[SW] GET_GAME_STREAMS error:', JSON.stringify(error, null, 0));
               sendResponse({
                 status: 'error',
                 error: error.message || 'Failed to get game streams'
               });
             } else {
-              console.log('[SW] GET_GAME_STREAMS success, streams count:', data && data.data ? data.data.length : 0);
               sendResponse({
                 status: 'ok',
                 streams: data && data.data ? data.data : [],
@@ -509,14 +436,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           });
         } else {
-          console.log('[SW] No access token available for game streams');
           sendResponse({
             status: 'error',
             error: 'Not authorized - no access token'
           });
         }
       }).catch(error => {
-        console.log('[SW] Error getting access token for game streams:', JSON.stringify(error, null, 0));
         sendResponse({
           status: 'error',
           error: 'Failed to get access token'
@@ -527,26 +452,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'GET_TOP_STREAMS':
       // Handle top streams request
-      console.log('[SW] GET_TOP_STREAMS message received');
-      
-      // Get OAuth token and call TwitchApi
       twitchOauth.getAccessToken().then(accessToken => {
-        console.log('[SW] Retrieved access token for top streams:', accessToken ? 'found' : 'not found');
         if (accessToken) {
           twitchApi.setToken(accessToken);
-          console.log('[SW] Set token on TwitchApi, calling getTopStreams');
           
           // Use the TwitchApi to get top streams
           twitchApi.getTopStreams((error, data) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
-              console.log('[SW] GET_TOP_STREAMS error:', JSON.stringify(error, null, 0));
               sendResponse({
                 status: 'error',
                 error: error.message || 'Failed to get top streams'
               });
             } else {
-              console.log('[SW] GET_TOP_STREAMS success, streams count:', data && data.data ? data.data.length : 0);
               sendResponse({
                 status: 'ok',
                 streams: data && data.data ? data.data : [],
@@ -555,14 +473,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           });
         } else {
-          console.log('[SW] No access token available for top streams');
           sendResponse({
             status: 'error',
             error: 'Not authorized - no access token'
           });
         }
       }).catch(error => {
-        console.log('[SW] Error getting access token for top streams:', JSON.stringify(error, null, 0));
         sendResponse({
           status: 'error',
           error: 'Failed to get access token'
@@ -573,10 +489,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'SEARCH_STREAMS':
       // Handle search streams request
-      console.log('[SW] SEARCH_STREAMS message received with query:', message.query);
-      
       if (!message.query) {
-        console.log('[SW] No search query provided');
         sendResponse({
           status: 'error',
           error: 'Search query is required'
@@ -586,22 +499,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
       // Get OAuth token and call TwitchApi
       twitchOauth.getAccessToken().then(accessToken => {
-        console.log('[SW] Retrieved access token for search:', accessToken ? 'found' : 'not found');
         if (accessToken) {
           twitchApi.setToken(accessToken);
-          console.log('[SW] Set token on TwitchApi, calling searchStreams');
           
           // Use the TwitchApi to search streams
           twitchApi.searchStreams(message.query, (error, data) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
-              console.log('[SW] SEARCH_STREAMS error:', JSON.stringify(error, null, 0));
               sendResponse({
                 status: 'error',
                 error: error.message || 'Failed to search streams'
               });
             } else {
-              console.log('[SW] SEARCH_STREAMS success, results count:', data && data.data ? data.data.length : 0);
               sendResponse({
                 status: 'ok',
                 streams: data && data.data ? data.data : [],
@@ -610,14 +519,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           });
         } else {
-          console.log('[SW] No access token available for search');
           sendResponse({
             status: 'error',
             error: 'Not authorized - no access token'
           });
         }
       }).catch(error => {
-        console.log('[SW] Error getting access token for search:', JSON.stringify(error, null, 0));
         sendResponse({
           status: 'error',
           error: 'Failed to get access token'
@@ -628,26 +535,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'GET_USER_INFO':
       // Handle user info request
-      console.log('[SW] GET_USER_INFO message received');
-      
-      // Get OAuth token and call TwitchApi
       twitchOauth.getAccessToken().then(accessToken => {
-        console.log('[SW] Retrieved access token for user info:', accessToken ? 'found' : 'not found');
         if (accessToken) {
           twitchApi.setToken(accessToken);
-          console.log('[SW] Set token on TwitchApi, calling getUserInfo');
           
           // Use the TwitchApi to get user info
           twitchApi.getUserInfo((error, userData) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
-              console.log('[SW] GET_USER_INFO error:', JSON.stringify(error, null, 0));
               sendResponse({
                 status: 'error',
                 error: error.message || 'Failed to get user info'
               });
             } else {
-              console.log('[SW] GET_USER_INFO success:', userData ? 'user data received' : 'no data');
               sendResponse({
                 status: 'ok',
                 user: userData || {}
@@ -655,14 +555,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           });
         } else {
-          console.log('[SW] No access token available for user info');
           sendResponse({
             status: 'error',
             error: 'Not authorized - no access token'
           });
         }
       }).catch(error => {
-        console.log('[SW] Error getting access token for user info:', JSON.stringify(error, null, 0));
         sendResponse({
           status: 'error',
           error: 'Failed to get access token'
@@ -674,6 +572,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Initialize on load
-console.log('[SW] Calling bgApp.init() on load');
-bgApp.init();
-console.log('[SW] Service worker script execution complete');;
+bgApp.init();;

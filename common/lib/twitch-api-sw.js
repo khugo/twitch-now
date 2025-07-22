@@ -101,7 +101,6 @@
       if (!response.ok) {
         if (response.status === 401) {
           // Token expired or invalid - trigger revocation
-          console.log('[SW API] 401 Unauthorized - token expired, revoking');
           // Note: We can't directly access twitchOauth here, so we'll throw a specific error
           throw new Error(`HTTP 401: Token expired or invalid`);
         }
@@ -130,7 +129,6 @@
       if (data && data.data && data.data[0]) {
         this.userId = data.data[0].id;
         this.userName = data.data[0].display_name;
-        console.log('[SW] User info retrieved - ID:', this.userId, 'Name:', this.userName);
         if (callback) callback(null, data.data[0]);
         return data.data[0];
       } else {
@@ -155,9 +153,7 @@
     if (!this.userId) {
       try {
         await this.getUserInfo();
-        console.log('[SW] Got user info, userId:', this.userId);
       } catch (err) {
-        console.log('[SW] Failed to get user info:', err.message);
         if (callback) callback(err);
         throw err;
       }

@@ -119,17 +119,14 @@
   };
 
   that.addAdapter = function(config) {
-    console.log('[SW] OAuth2.addAdapter called with:', JSON.stringify(config, null, 0));
     
     const id = config.id;
     const opts = config.opts;
     const flow = config.codeflow;
     
-    console.log('[SW] Parsed - id:', id, 'opts:', JSON.stringify(opts, null, 0), 'flow:', JSON.stringify(flow, null, 0));
     
     const adapter = new Adapter(id, opts, flow);
     that._adapters[id] = adapter;
-    console.log('[SW] OAuth2 adapter created successfully');
     return adapter;
   };
 
