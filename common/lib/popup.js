@@ -5,8 +5,12 @@
   console.log('[DEBUG] Creating app with Backbone.Events');
   
   var b = app.b = utils._getBackgroundPage();
-  console.log('[DEBUG] Got background page:', JSON.stringify(b, null, 0));
-  console.log('[DEBUG] Background page twitchApi:', JSON.stringify(b.twitchApi, null, 0));
+  console.log('[DEBUG] Got background page with keys:', Object.keys(b));
+  console.log('[DEBUG] Background page twitchApi methods:', {
+    isAuthorized: typeof b.twitchApi.isAuthorized,
+    authorize: typeof b.twitchApi.authorize,
+    trigger: typeof b.twitchApi.trigger
+  });
   
   var _baron;
 
@@ -106,13 +110,13 @@
       }
     });
 
-    console.log('[DEBUG] Creating notifications view with collection:', JSON.stringify(b.notifications, null, 0));
+    console.log('[DEBUG] Creating notifications view with collection length:', b.notifications.length);
     views.notifications = new ChannelNotificationListView({
       el        : "#notifications-screen",
       collection: b.notifications
     })
 
-    console.log('[DEBUG] Creating followedGames view with collection:', JSON.stringify(b.followedgames, null, 0));
+    console.log('[DEBUG] Creating followedGames view with collection length:', b.followedgames.length);
     views.followedGames = new GameListView({
       el        : "#followed-game-screen",
       collection: b.followedgames,
@@ -124,7 +128,7 @@
       }
     })
 
-    console.log('[DEBUG] Creating followedChannels view with collection:', JSON.stringify(b.followedChannels, null, 0));
+    console.log('[DEBUG] Creating followedChannels view with collection length:', b.followedChannels.length);
     console.log('[DEBUG] followedChannels type:', typeof b.followedChannels);
     console.log('[DEBUG] followedChannels constructor:', b.followedChannels.constructor.name);
     console.log('[DEBUG] followedChannels instanceof Backbone.Collection:', b.followedChannels instanceof Backbone.Collection);
@@ -174,7 +178,7 @@
       collection: b.topstreams
     });
 
-    console.log('[DEBUG] Creating following streams view with collection:', JSON.stringify(b.following, null, 0));
+    console.log('[DEBUG] Creating following streams view with collection length:', b.following.length);
     console.log('[DEBUG] b.following type:', typeof b.following);
     console.log('[DEBUG] b.following length:', b.following ? b.following.length : 'undefined');
     views.following = new FollowingStreamsView({
@@ -201,6 +205,10 @@
         if (b.following && b.following.update) {
           console.log('[DEBUG] Triggering following collection update on popup open');
           b.following.update();
+        }
+        if (b.games && b.games.update) {
+          console.log('[DEBUG] Triggering games collection update on popup open');
+          b.games.update();
         }
       } else {
         console.log('[DEBUG] Not yet authorized on popup open');
@@ -354,12 +362,12 @@
           console.log('[DEBUG] Setting up authorize event listener');
           app.twitchApi.on('authorize', function() {
             console.log('[DEBUG] AUTHORIZE EVENT RECEIVED IN LOGIN!');
-            console.log('[DEBUG] b.following after auth:', JSON.stringify(b.following ? b.following.length : 'undefined', null, 0));
+            console.log('[DEBUG] b.following after auth, length:', b.following ? b.following.length : 'undefined');
           });
           
           app.twitchApi.on('change:authorized', function() {
             console.log('[DEBUG] CHANGE:AUTHORIZED EVENT RECEIVED IN LOGIN!');
-            console.log('[DEBUG] b.following after auth change:', JSON.stringify(b.following ? b.following.length : 'undefined', null, 0));
+            console.log('[DEBUG] b.following after auth change, length:', b.following ? b.following.length : 'undefined');
           });
         } else {
           console.log('[DEBUG] app.twitchApi.on not available for event listening');
@@ -505,9 +513,9 @@
       var themeType = this.collection.get("themeType");
       var simpleView = this.collection.get("simpleView");
       
-      console.log('[DEBUG] defaultTab model:', JSON.stringify(defaultTab, null, 0));
-      console.log('[DEBUG] themeType model:', JSON.stringify(themeType, null, 0));
-      console.log('[DEBUG] simpleView model:', JSON.stringify(simpleView, null, 0));
+      console.log('[DEBUG] defaultTab model:', defaultTab ? 'found' : 'undefined');
+      console.log('[DEBUG] themeType model:', themeType ? 'found' : 'undefined');
+      console.log('[DEBUG] simpleView model:', simpleView ? 'found' : 'undefined');
       
       if (defaultTab) {
         this.setDefaultTab(defaultTab.get("value"));

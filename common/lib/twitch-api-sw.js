@@ -153,6 +153,57 @@
     }
   };
 
+  TwitchApi.prototype.getTopGames = async function(callback) {
+    if (!this.isAuthorized()) {
+      const error = new Error('Not authorized');
+      if (callback) callback(error);
+      throw error;
+    }
+
+    try {
+      const data = await this.send('games/top');
+      
+      // Process response similar to existing Games collection
+      if (data && data.data) {
+        data.data = Array.isArray(data.data) ? data.data : [];
+        data.data.forEach(function (g) {
+          g.box_art_url = g.box_art_url.replace(/{width}/, 136);
+          g.box_art_url = g.box_art_url.replace(/{height}/, 190);
+        });
+      }
+      
+      if (callback) callback(null, data);
+      return data;
+    } catch (err) {
+      if (callback) callback(err);
+      throw err;
+    }
+  };
+
+  TwitchApi.prototype.getGameStreams = async function(gameId, callback) {
+    if (!this.isAuthorized()) {
+      const error = new Error('Not authorized');
+      if (callback) callback(error);
+      throw error;
+    }
+
+    if (!gameId) {
+      const error = new Error('Game ID is required');
+      if (callback) callback(error);
+      throw error;
+    }
+
+    try {
+      const data = await this.send('streams', { game_id: gameId });
+      
+      if (callback) callback(null, data);
+      return data;
+    } catch (err) {
+      if (callback) callback(err);
+      throw err;
+    }
+  };
+
   // Make TwitchApi available globally
   if (typeof self !== 'undefined') {
     self.TwitchApi = TwitchApi;

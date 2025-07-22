@@ -100,7 +100,9 @@
     console.log('[DEBUG] Backbone.Events available:', typeof Backbone.Events);
     
     // Manifest V3 - create a proxy object for service worker communication
+    var dispatcher = _.extend({}, Backbone.Events);
     var backgroundProxy = {
+      dispatcher: dispatcher,
       // Create proxy objects for background functions
       bgApp: {
         setBadge: function(text) {
@@ -193,13 +195,71 @@
       topstreams: new Backbone.Collection(),
       videos: new Backbone.Collection(),
       search: new Backbone.Collection(),
-      games: new Backbone.Collection(),
+      games: _.extend(new Backbone.Collection(), {
+        update: function() {
+          console.log('[DEBUG] games collection update() called');
+          chrome.runtime.sendMessage({ 
+            type: 'GET_TOP_GAMES' 
+          }, (response) => {
+            console.log('[DEBUG] GET_TOP_GAMES response:', JSON.stringify(response, null, 0));
+            
+            if (response && response.status === 'ok' && response.games) {
+              console.log('[DEBUG] Adding', response.games.length, 'games to collection');
+              this.reset(response.games);
+              console.log('[DEBUG] Games collection after reset:', this.length, 'games');
+            } else {
+              console.log('[DEBUG] No games in response or error occurred');
+              this.reset([]);
+            }
+            
+            console.log('[DEBUG] Games collection reset completed');
+          });
+        }
+      }),
       settings: new Backbone.Collection(),
       contributors: new Backbone.Collection(),
       toppedgames: new Backbone.Collection(),
       liveStreams: new Backbone.Collection(),
       featuredStreams: new Backbone.Collection(),
-      gameStreams: new Backbone.Collection(),
+      gameStreams: _.extend(new Backbone.Collection(), {
+        game: null,
+        gameid: null,
+        initialize: function() {
+          console.log('[DEBUG] gameStreams collection initialized');
+          // Listen for gameLobby:change events
+          dispatcher.on("gameLobby:change", function(gameName, gameId) {
+            console.log('[DEBUG] gameStreams received gameLobby:change event - game:', gameName, 'id:', gameId);
+            this.game = gameName;
+            this.gameid = gameId;
+            this.update();
+          }.bind(this));
+        },
+        update: function() {
+          console.log('[DEBUG] gameStreams collection update() called for game:', this.game, 'id:', this.gameid);
+          if (!this.gameid) {
+            console.log('[DEBUG] No game ID available for gameStreams update');
+            return;
+          }
+          
+          chrome.runtime.sendMessage({ 
+            type: 'GET_GAME_STREAMS',
+            gameId: this.gameid
+          }, (response) => {
+            console.log('[DEBUG] GET_GAME_STREAMS response:', JSON.stringify(response, null, 0));
+            
+            if (response && response.status === 'ok' && response.streams) {
+              console.log('[DEBUG] Adding', response.streams.length, 'game streams to collection');
+              this.reset(response.streams);
+              console.log('[DEBUG] Game streams collection after reset:', this.length, 'streams');
+            } else {
+              console.log('[DEBUG] No game streams in response or error occurred');
+              this.reset([]);
+            }
+            
+            console.log('[DEBUG] Game streams collection reset completed');
+          });
+        }
+      }),
       gameVideos: new Backbone.Collection(),
       following: _.extend(new Backbone.Collection(), {
         update: function() {
@@ -229,25 +289,75 @@
         }
       }),
       appControl: new Backbone.Model(),
-      gameLobby: new Backbone.Model(),
+      gameLobby: _.extend(new Backbone.Model(), {
+        lastChange: 0,
+        change: function(gameName) {
+          console.log('[DEBUG] gameLobby.change called with gameName:', gameName);
+          
+          // Find game in games or followedgames collections
+          var newGame = null;
+          if (backgroundProxy.games && backgroundProxy.games.find) {
+            newGame = backgroundProxy.games.find(function(g) {
+              return g.get && g.get('name') === gameName;
+            });
+          }
+          
+          if (!newGame && backgroundProxy.followedgames && backgroundProxy.followedgames.find) {
+            newGame = backgroundProxy.followedgames.find(function(g) {
+              return g.get && g.get('name') === gameName;
+            });
+          }
+          
+          if (newGame) {
+            console.log('[DEBUG] Found game for gameLobby:', gameName);
+            var currentTime = Date.now();
+            var shouldUpdate = !this.get('game') || 
+                             (newGame.get('name') !== this.get('game').name) || 
+                             (currentTime - this.lastChange) > 5 * 60 * 1000;
+            
+            if (shouldUpdate) {
+              console.log('[DEBUG] Updating gameLobby model');
+              this.set(newGame.toJSON ? newGame.toJSON() : newGame.attributes);
+              this.lastChange = currentTime;
+              
+              // Trigger dispatcher events for game lobby collections to update
+              var gameId = newGame.get ? newGame.get('id') : newGame.attributes.id;
+              console.log('[DEBUG] Triggering gameLobby:change event with gameName:', gameName, 'gameId:', gameId);
+              dispatcher.trigger("gameLobby:change", gameName, gameId);
+              console.log('[DEBUG] gameLobby model updated');
+            }
+          } else {
+            console.log('[DEBUG] Game not found in collections:', gameName);
+          }
+        }
+      }),
       user: new Backbone.Model()
     };
     
-    console.log('[DEBUG] Created backgroundProxy:', JSON.stringify(backgroundProxy, null, 0));
-    console.log('[DEBUG] twitchApi proxy:', JSON.stringify(backgroundProxy.twitchApi, null, 0));
-    console.log('[DEBUG] twitchApi has _listenId?', '_listenId' in backgroundProxy.twitchApi);
-    console.log('[DEBUG] twitchApi properties:', JSON.stringify(Object.getOwnPropertyNames(backgroundProxy.twitchApi)));
+    // Initialize collections that have initialize methods
+    if (backgroundProxy.gameStreams && backgroundProxy.gameStreams.initialize) {
+      backgroundProxy.gameStreams.initialize();
+    }
     
-    // Log all collections
-    console.log('[DEBUG] notifications collection:', JSON.stringify(backgroundProxy.notifications, null, 0));
-    console.log('[DEBUG] followedgames collection:', JSON.stringify(backgroundProxy.followedgames, null, 0));
-    console.log('[DEBUG] followedChannels collection:', JSON.stringify(backgroundProxy.followedChannels, null, 0));
-    console.log('[DEBUG] topstreams collection:', JSON.stringify(backgroundProxy.topstreams, null, 0));
-    console.log('[DEBUG] videos collection:', JSON.stringify(backgroundProxy.videos, null, 0));
-    console.log('[DEBUG] search collection:', JSON.stringify(backgroundProxy.search, null, 0));
-    console.log('[DEBUG] games collection:', JSON.stringify(backgroundProxy.games, null, 0));
-    console.log('[DEBUG] settings collection:', JSON.stringify(backgroundProxy.settings, null, 0));
-    console.log('[DEBUG] contributors collection:', JSON.stringify(backgroundProxy.contributors, null, 0));
+    console.log('[DEBUG] Created backgroundProxy with collections count:', {
+      games: backgroundProxy.games ? backgroundProxy.games.length : 'undefined',
+      gameStreams: backgroundProxy.gameStreams ? 'initialized' : 'undefined',
+      following: backgroundProxy.following ? backgroundProxy.following.length : 'undefined',
+      dispatcher: typeof backgroundProxy.dispatcher
+    });
+    console.log('[DEBUG] twitchApi proxy has methods:', {
+      isAuthorized: typeof backgroundProxy.twitchApi.isAuthorized,
+      authorize: typeof backgroundProxy.twitchApi.authorize,
+      trigger: typeof backgroundProxy.twitchApi.trigger
+    });
+    
+    // Log collection lengths only to avoid circular references
+    console.log('[DEBUG] Collection status:', {
+      notifications: backgroundProxy.notifications.length,
+      games: backgroundProxy.games.length,
+      following: backgroundProxy.following.length,
+      gameStreams: backgroundProxy.gameStreams.length
+    });
     
     return backgroundProxy;
   }

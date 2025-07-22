@@ -358,6 +358,96 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true; // Keep sendResponse available for async response
       break;
+      
+    case 'GET_TOP_GAMES':
+      // Handle top games request
+      console.log('[SW] GET_TOP_GAMES message received');
+      
+      // Get OAuth token and call TwitchApi
+      twitchOauth.getAccessToken().then(accessToken => {
+        console.log('[SW] Retrieved access token for games:', accessToken ? 'found' : 'not found');
+        if (accessToken) {
+          twitchApi.setToken(accessToken);
+          console.log('[SW] Set token on TwitchApi, calling getTopGames');
+          
+          // Use the TwitchApi to get top games
+          twitchApi.getTopGames((error, data) => {
+            if (error) {
+              console.log('[SW] GET_TOP_GAMES error:', JSON.stringify(error, null, 0));
+              sendResponse({
+                status: 'error',
+                error: error.message || 'Failed to get top games'
+              });
+            } else {
+              console.log('[SW] GET_TOP_GAMES success, games count:', data && data.data ? data.data.length : 0);
+              sendResponse({
+                status: 'ok',
+                games: data && data.data ? data.data : [],
+                total: data && data.total ? data.total : 0
+              });
+            }
+          });
+        } else {
+          console.log('[SW] No access token available for games');
+          sendResponse({
+            status: 'error',
+            error: 'Not authorized - no access token'
+          });
+        }
+      }).catch(error => {
+        console.log('[SW] Error getting access token for games:', JSON.stringify(error, null, 0));
+        sendResponse({
+          status: 'error',
+          error: 'Failed to get access token'
+        });
+      });
+      return true; // Keep sendResponse available for async response
+      break;
+      
+    case 'GET_GAME_STREAMS':
+      // Handle game streams request
+      console.log('[SW] GET_GAME_STREAMS message received for gameId:', message.gameId);
+      
+      // Get OAuth token and call TwitchApi
+      twitchOauth.getAccessToken().then(accessToken => {
+        console.log('[SW] Retrieved access token for game streams:', accessToken ? 'found' : 'not found');
+        if (accessToken) {
+          twitchApi.setToken(accessToken);
+          console.log('[SW] Set token on TwitchApi, calling getGameStreams');
+          
+          // Use the TwitchApi to get streams for the game
+          twitchApi.getGameStreams(message.gameId, (error, data) => {
+            if (error) {
+              console.log('[SW] GET_GAME_STREAMS error:', JSON.stringify(error, null, 0));
+              sendResponse({
+                status: 'error',
+                error: error.message || 'Failed to get game streams'
+              });
+            } else {
+              console.log('[SW] GET_GAME_STREAMS success, streams count:', data && data.data ? data.data.length : 0);
+              sendResponse({
+                status: 'ok',
+                streams: data && data.data ? data.data : [],
+                total: data && data.total ? data.total : 0
+              });
+            }
+          });
+        } else {
+          console.log('[SW] No access token available for game streams');
+          sendResponse({
+            status: 'error',
+            error: 'Not authorized - no access token'
+          });
+        }
+      }).catch(error => {
+        console.log('[SW] Error getting access token for game streams:', JSON.stringify(error, null, 0));
+        sendResponse({
+          status: 'error',
+          error: 'Failed to get access token'
+        });
+      });
+      return true; // Keep sendResponse available for async response
+      break;
   }
 });
 
