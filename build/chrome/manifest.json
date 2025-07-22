@@ -1,0 +1,45 @@
+{
+  "name": "Twitch Now",
+  "version": "1.1.216",
+  "default_locale": "en",
+  "manifest_version": 3,
+  "description": "Explore games & track your favorite streams on Twitch",
+  "content_scripts": [
+    {
+      "run_at": "document_start",
+      "matches": [
+        "*://*.twitch.tv/*"
+      ],
+      "all_frames": true,
+      "js": [
+        "common/content/theatre-mode.js"
+      ]
+    }
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "minimum_chrome_version": "88",
+  "icons": {
+    "16": "common/icons/32_1.png",
+    "48": "common/icons/48_1.png",
+    "128": "common/icons/128_1.png"
+  },
+  "action": {
+    "default_icon": {
+      "19": "common/icons/19_2.png",
+      "38": "common/icons/38_2.png"
+    },
+    "default_popup": "common/html/popup.html"
+  },
+  "permissions": [
+    "storage",
+    "notifications",
+    "tabs",
+    "alarms"
+  ],
+  "host_permissions": [
+    "*://*.twitch.tv/*",
+    "*://ndragomirov.github.io/*"
+  ]
+}
