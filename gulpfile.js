@@ -32,23 +32,6 @@ gulp.task('lint', function () {
     .pipe(jshint.reporter('default'));
 });
 
-gulp.task('copy:opera', function () {
-  return gulp
-    .src([
-      'build/chrome/**',
-      'opera/**'
-    ])
-    .pipe(gulp.dest('build/opera/'))
-})
-
-
-gulp.task('copy:firefox', function () {
-  return gulp.src([
-    'build/chrome/**',
-    'firefox/**'
-  ])
-    .pipe(gulp.dest('build/firefox/'))
-})
 
 gulp.task('copy:chrome', function () {
   var c1 = gulp
@@ -133,12 +116,6 @@ gulp.task('clean:dist', function (done) {
   done();
 });
 
-gulp.task('clean:opera', function (done) {
-  del.sync([
-    'build/opera/*'
-  ]);
-  done();
-});
 
 gulp.task('clean:chrome', function (done) {
   del.sync([
@@ -147,12 +124,6 @@ gulp.task('clean:chrome', function (done) {
   done();
 });
 
-gulp.task('clean:firefox', function (done) {
-  del.sync([
-    'build/firefox/*'
-  ]);
-  done();
-});
 
 gulp.task('compress:chrome', function () {
   var v = JSON.parse(fs.readFileSync("package.json")).version;
@@ -162,21 +133,7 @@ gulp.task('compress:chrome', function () {
     .pipe(gulp.dest('dist/'));
 })
 
-gulp.task('compress:opera', function () {
-  var v = JSON.parse(fs.readFileSync("package.json")).version;
 
-  return gulp.src('build/opera/**')
-    .pipe(zip('twitch-now-opera-' + v + '.zip'))
-    .pipe(gulp.dest('dist/'));
-})
-
-gulp.task('compress:firefox', function () {
-  var v = JSON.parse(fs.readFileSync("package.json")).version;
-
-  return gulp.src('build/firefox/**')
-    .pipe(zip('twitch-now-firefox-' + v + '.zip'))
-    .pipe(gulp.dest('dist/'));
-})
 
 gulp.task('handlebars', function () {
   return gulp.src('templates/*.html')
@@ -209,9 +166,7 @@ gulp.task('bump', function (done) {
   gulp
     .src([
       './package.json',
-      './chrome/manifest.json',
-      './opera/manifest.json',
-      './firefox/manifest.json'
+      './chrome/manifest.json'
     ])
     .pipe(bump())
     .pipe(gulp.dest(function (d) {
@@ -233,31 +188,12 @@ gulp.task('chrome', gulp.series('clean:chrome',
     done();
   }));
 
-gulp.task('opera', gulp.series(
-  'chrome',
-  'clean:opera',
-  'copy:opera', function (done) {
-    done();
-  }));
-
-gulp.task('firefox', gulp.series(
-  'chrome',
-  'clean:firefox',
-  'copy:firefox', function (done) {
-    done();
-  }));
-
-gulp.task('firefox-watch' , function (){
-  gulp.watch('common/lib/*', gulp.series('chrome', 'clean:firefox', 'copy:firefox', function (done) {done();}));
-});
 
 gulp.task('dist', gulp.series(
   ['bump', 'clean:dist'],
   'chrome',
-  'opera',
-  'firefox',
   'stripdebug',
-  ['compress:chrome', 'compress:opera', 'compress:firefox'],
+  'compress:chrome',
   function (done) {
     done();
   }));
