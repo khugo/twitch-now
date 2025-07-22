@@ -11,12 +11,7 @@ Open the extension and click on Login.
 
 ## Development
 
-* Node.js
-* Gulp
-
-## How to build
-
-Before all, you need to install dependencies:
+Install dependencies:
 ```
 $ npm install
 ```
