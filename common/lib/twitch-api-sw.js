@@ -59,6 +59,20 @@
     this.trigger("tokenchange", accessToken);
   };
 
+  // Helper function to process stream thumbnail URLs
+  TwitchApi.prototype.processStreamThumbnails = function(data) {
+    if (data && data.data && data.data.length) {
+      data.data = data.data.map(function(s) {
+        if (s.thumbnail_url && typeof s.thumbnail_url === 'string') {
+          s.thumbnail_url = s.thumbnail_url.replace(/{width}/, 134);
+          s.thumbnail_url = s.thumbnail_url.replace(/{height}/, 70);
+        }
+        return s;
+      });
+    }
+    return data;
+  };
+
   TwitchApi.prototype.send = async function(endpoint, params, callback) {
     if (typeof params === 'function') {
       callback = params;
@@ -145,8 +159,10 @@
 
     try {
       const data = await this.send('streams/followed', { user_id: this.userId });
-      if (callback) callback(null, data);
-      return data;
+      const processedData = this.processStreamThumbnails(data);
+      
+      if (callback) callback(null, processedData);
+      return processedData;
     } catch (err) {
       if (callback) callback(err);
       throw err;
@@ -195,9 +211,10 @@
 
     try {
       const data = await this.send('streams', { game_id: gameId });
+      const processedData = this.processStreamThumbnails(data);
       
-      if (callback) callback(null, data);
-      return data;
+      if (callback) callback(null, processedData);
+      return processedData;
     } catch (err) {
       if (callback) callback(err);
       throw err;
@@ -213,9 +230,10 @@
 
     try {
       const data = await this.send('streams');
+      const processedData = this.processStreamThumbnails(data);
       
-      if (callback) callback(null, data);
-      return data;
+      if (callback) callback(null, processedData);
+      return processedData;
     } catch (err) {
       if (callback) callback(err);
       throw err;
