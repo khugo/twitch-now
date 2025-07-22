@@ -448,6 +448,51 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true; // Keep sendResponse available for async response
       break;
+      
+    case 'GET_TOP_STREAMS':
+      // Handle top streams request
+      console.log('[SW] GET_TOP_STREAMS message received');
+      
+      // Get OAuth token and call TwitchApi
+      twitchOauth.getAccessToken().then(accessToken => {
+        console.log('[SW] Retrieved access token for top streams:', accessToken ? 'found' : 'not found');
+        if (accessToken) {
+          twitchApi.setToken(accessToken);
+          console.log('[SW] Set token on TwitchApi, calling getTopStreams');
+          
+          // Use the TwitchApi to get top streams
+          twitchApi.getTopStreams((error, data) => {
+            if (error) {
+              console.log('[SW] GET_TOP_STREAMS error:', JSON.stringify(error, null, 0));
+              sendResponse({
+                status: 'error',
+                error: error.message || 'Failed to get top streams'
+              });
+            } else {
+              console.log('[SW] GET_TOP_STREAMS success, streams count:', data && data.data ? data.data.length : 0);
+              sendResponse({
+                status: 'ok',
+                streams: data && data.data ? data.data : [],
+                total: data && data.total ? data.total : 0
+              });
+            }
+          });
+        } else {
+          console.log('[SW] No access token available for top streams');
+          sendResponse({
+            status: 'error',
+            error: 'Not authorized - no access token'
+          });
+        }
+      }).catch(error => {
+        console.log('[SW] Error getting access token for top streams:', JSON.stringify(error, null, 0));
+        sendResponse({
+          status: 'error',
+          error: 'Failed to get access token'
+        });
+      });
+      return true; // Keep sendResponse available for async response
+      break;
   }
 });
 

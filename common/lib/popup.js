@@ -210,6 +210,10 @@
           console.log('[DEBUG] Triggering games collection update on popup open');
           b.games.update();
         }
+        if (b.topstreams && b.topstreams.update) {
+          console.log('[DEBUG] Triggering topstreams collection update on popup open');
+          b.topstreams.update();
+        }
       } else {
         console.log('[DEBUG] Not yet authorized on popup open');
       }

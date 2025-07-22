@@ -204,6 +204,24 @@
     }
   };
 
+  TwitchApi.prototype.getTopStreams = async function(callback) {
+    if (!this.isAuthorized()) {
+      const error = new Error('Not authorized');
+      if (callback) callback(error);
+      throw error;
+    }
+
+    try {
+      const data = await this.send('streams');
+      
+      if (callback) callback(null, data);
+      return data;
+    } catch (err) {
+      if (callback) callback(err);
+      throw err;
+    }
+  };
+
   // Make TwitchApi available globally
   if (typeof self !== 'undefined') {
     self.TwitchApi = TwitchApi;

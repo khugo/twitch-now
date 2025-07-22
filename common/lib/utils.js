@@ -192,7 +192,27 @@
       notifications: new Backbone.Collection(),
       followedgames: new Backbone.Collection(),
       followedChannels: new Backbone.Collection(),
-      topstreams: new Backbone.Collection(),
+      topstreams: _.extend(new Backbone.Collection(), {
+        update: function() {
+          console.log('[DEBUG] topstreams collection update() called');
+          chrome.runtime.sendMessage({ 
+            type: 'GET_TOP_STREAMS' 
+          }, (response) => {
+            console.log('[DEBUG] GET_TOP_STREAMS response:', JSON.stringify(response, null, 0));
+            
+            if (response && response.status === 'ok' && response.streams) {
+              console.log('[DEBUG] Adding', response.streams.length, 'top streams to collection');
+              this.reset(response.streams);
+              console.log('[DEBUG] Top streams collection after reset:', this.length, 'streams');
+            } else {
+              console.log('[DEBUG] No top streams in response or error occurred');
+              this.reset([]);
+            }
+            
+            console.log('[DEBUG] Top streams collection reset completed');
+          });
+        }
+      }),
       videos: new Backbone.Collection(),
       search: new Backbone.Collection(),
       games: _.extend(new Backbone.Collection(), {
@@ -356,7 +376,8 @@
       notifications: backgroundProxy.notifications.length,
       games: backgroundProxy.games.length,
       following: backgroundProxy.following.length,
-      gameStreams: backgroundProxy.gameStreams.length
+      gameStreams: backgroundProxy.gameStreams.length,
+      topstreams: backgroundProxy.topstreams.length
     });
     
     return backgroundProxy;
