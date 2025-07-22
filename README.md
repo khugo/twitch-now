@@ -3,7 +3,7 @@
 > [!NOTE]
 > This is a minimal fork of the original [Twitch Now](https://github.com/Ndragomirov/twitch-now) extension to migrate it to work with Chrome Manifest V3. Only Chrome is supported, and it's possible some of the features outside of the core functionality do not work.
 
-![Twitch Now Extension](screenshot.png)
+<img src="screenshot.png" alt="Twitch Now Extension" width="400">
 
 ## Installing
 
