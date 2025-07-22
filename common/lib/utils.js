@@ -183,6 +183,44 @@
       }
     });
     
+    // Create Badge model proxy similar to original app.js
+    var BadgeModel = Backbone.Model.extend({
+      defaults: {
+        count: 0
+      },
+      
+      initialize: function() {
+        var self = this;
+        
+        // Listen for count changes and update badge
+        self.on("change:count", function() {
+          // Check if showBadge setting is enabled
+          if (backgroundProxy.settings && backgroundProxy.settings.get("showBadge") && 
+              backgroundProxy.settings.get("showBadge").get("value")) {
+            console.log('[DEBUG] Badge count changed to:', self.get("count"));
+            // Send STREAMS_UPDATED message to service worker
+            chrome.runtime.sendMessage({
+              type: 'STREAMS_UPDATED',
+              liveCount: self.get("count"),
+              newStreams: [] // For now, we'll handle new stream notifications separately
+            });
+          } else {
+            // Clear badge if showBadge is disabled
+            chrome.runtime.sendMessage({ type: 'CLEAR_BADGE' });
+          }
+        });
+      },
+      
+      onShowBadgeChange: function(value) {
+        if (value) {
+          // Re-trigger badge update
+          this.trigger("change:count");
+        } else {
+          chrome.runtime.sendMessage({ type: 'CLEAR_BADGE' });
+        }
+      }
+    });
+    
     var backgroundProxy = {
       dispatcher: dispatcher,
       // Create proxy objects for background functions
@@ -664,6 +702,16 @@
           settingsProxy.saveToStorage();
         });
         
+        // Listen for showBadge setting changes
+        settingsProxy.on("change", function(model) {
+          if (model.get("id") === "showBadge") {
+            console.log('[DEBUG] showBadge setting changed to:', model.get("value"));
+            if (backgroundProxy.badge) {
+              backgroundProxy.badge.onShowBadgeChange(model.get("value"));
+            }
+          }
+        });
+        
         console.log('[DEBUG] Settings collection initialized with', settingsProxy.length, 'settings');
         return settingsProxy;
       })(),
@@ -714,6 +762,15 @@
       gameVideos: new Backbone.Collection(),
       following: _.extend(new Backbone.Collection(), {
         model: StreamModel,
+        
+        initialize: function() {
+          // Listen for collection changes and update badge count
+          this.on("add update remove reset", function() {
+            console.log('[DEBUG] Following collection changed, updating badge count:', this.length);
+            backgroundProxy.badge.set("count", this.length);
+          });
+        },
+        
         update: function() {
           console.log('[DEBUG] following collection update() called');
           console.log('[DEBUG] this in update - has trigger method:', typeof this.trigger);
@@ -741,6 +798,7 @@
         }
       }),
       appControl: new Backbone.Model(),
+      badge: new BadgeModel(),
       gameLobby: _.extend(new Backbone.Model(), {
         lastChange: 0,
         change: function(gameName) {
@@ -790,6 +848,27 @@
     if (backgroundProxy.gameStreams && backgroundProxy.gameStreams.initialize) {
       backgroundProxy.gameStreams.initialize();
     }
+    if (backgroundProxy.following && backgroundProxy.following.initialize) {
+      backgroundProxy.following.initialize();
+    }
+    
+    // Listen for background stream updates from service worker
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.type === 'BACKGROUND_STREAMS_UPDATED') {
+        console.log('[DEBUG] Received background streams update, count:', message.streamCount);
+        
+        // Update badge count to match service worker
+        if (backgroundProxy.badge) {
+          backgroundProxy.badge.set("count", message.streamCount);
+        }
+        
+        // Optionally update following collection if popup is open
+        if (message.streams && backgroundProxy.following) {
+          console.log('[DEBUG] Syncing following collection with background data');
+          backgroundProxy.following.reset(message.streams);
+        }
+      }
+    });
     
     console.log('[DEBUG] Created backgroundProxy with collections count:', {
       games: backgroundProxy.games ? backgroundProxy.games.length : 'undefined',

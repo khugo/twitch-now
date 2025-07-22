@@ -157,25 +157,64 @@ bgApp.sendNotification = async function(streamList) {
 // Basic stream monitoring
 bgApp.checkForNewStreams = async function() {
   try {
-    // Send message to popup to trigger stream check (if popup is open)
-    chrome.runtime.sendMessage({
-      type: 'CHECK_STREAMS'
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        // Popup probably closed, ignore the error
-        console.log('[SW] Popup not available for stream check');
+    console.log('[SW] Background check for new streams starting...');
+    
+    // Get access token first
+    const accessToken = await twitchOauth.getAccessToken();
+    if (!accessToken) {
+      console.log('[SW] No access token available for background check');
+      return;
+    }
+    
+    // Set token and get followed streams directly from service worker
+    twitchApi.setToken(accessToken);
+    
+    // Use callback style for better error handling
+    twitchApi.getFollowedStreams(async (error, data) => {
+      if (error) {
+        console.error('[SW] Error fetching followed streams in background:', error);
+        return;
       }
+      
+      const streamCount = data && data.data ? data.data.length : 0;
+      console.log('[SW] Background check found', streamCount, 'live followed streams');
+      
+      // Check if showBadge setting is enabled
+      const settings = await bgApp.get('settings') || [];
+      const showBadgeSetting = settings.find(s => s.id === 'showBadge');
+      const showBadge = showBadgeSetting ? showBadgeSetting.value : true; // Default to true
+      
+      if (showBadge) {
+        bgApp.setBadge(streamCount);
+        console.log('[SW] Badge updated to:', streamCount);
+      } else {
+        bgApp.clearBadge();
+        console.log('[SW] Badge cleared (showBadge disabled)');
+      }
+      
+      // Optionally send message to popup if it's open
+      chrome.runtime.sendMessage({
+        type: 'BACKGROUND_STREAMS_UPDATED',
+        streamCount: streamCount,
+        streams: data && data.data ? data.data : []
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          // Popup probably closed, ignore the error
+          console.log('[SW] Popup not available for background update notification');
+        }
+      });
     });
+    
   } catch (err) {
-    console.error('Failed to check for new streams:', err);
+    console.error('[SW] Failed to check for new streams:', err);
   }
 };
 
 // Periodic checking using chrome.alarms
 bgApp.startPeriodicChecking = function() {
   chrome.alarms.create('checkStreams', {
-    delayInMinutes: 1,
-    periodInMinutes: 5 // Check every 5 minutes
+    delayInMinutes: 0.1, // First check in 6 seconds (0.1 minutes)
+    periodInMinutes: 5 // Check every 5 minutes after that
   });
 };
 
@@ -200,9 +239,15 @@ console.log('[SW] TwitchApi instance created:', typeof twitchApi);
 bgApp.init = function() {
   console.log('[SW] Twitch Now service worker starting...');
   console.log('[SW] Initializing badge, notifications, and periodic checking');
-  bgApp.clearBadge();
+  
+  // Don't clear badge immediately - let the stream check determine correct state
   bgApp.bindNotificationListeners();
   bgApp.startPeriodicChecking();
+  
+  // Perform immediate check for live streams on startup
+  console.log('[SW] Performing immediate check for live streams...');
+  bgApp.checkForNewStreams();
+  
   console.log('[SW] Service worker initialization complete');
 };
 
