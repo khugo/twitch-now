@@ -94,7 +94,37 @@
   }
 
   that._getBackgroundPage = function (){
-    return _browser.extension.getBackgroundPage();
+    // Manifest V3 - create a proxy object for service worker communication
+    return {
+      // Create proxy objects for background functions
+      bgApp: {
+        setBadge: function(text) {
+          chrome.runtime.sendMessage({ type: 'SET_BADGE', text: text });
+        },
+        clearBadge: function() {
+          chrome.runtime.sendMessage({ type: 'CLEAR_BADGE' });
+        },
+        sendNotification: function(streams) {
+          chrome.runtime.sendMessage({ type: 'SEND_NOTIFICATION', streams: streams });
+        }
+      },
+      // Proxy for twitchApi
+      twitchApi: {
+        isAuthorized: function() {
+          return new Promise((resolve) => {
+            chrome.runtime.sendMessage({ type: 'IS_AUTHORIZED' }, (response) => {
+              resolve(response.authorized);
+            });
+          });
+        },
+        authorize: function() {
+          chrome.runtime.sendMessage({ type: 'AUTHORIZE' });
+        },
+        revoke: function() {
+          chrome.runtime.sendMessage({ type: 'REVOKE' });
+        }
+      }
+    };
   }
 
   that.getConstants = function (){

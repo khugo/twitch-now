@@ -210,8 +210,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       break;
       
+    case 'SET_BADGE':
+      bgApp.setBadge(message.text);
+      break;
+      
     case 'CLEAR_BADGE':
       bgApp.clearBadge();
+      break;
+      
+    case 'SEND_NOTIFICATION':
+      if (message.streams && message.streams.length > 0) {
+        bgApp.sendNotification(message.streams);
+      }
+      break;
+      
+    case 'IS_AUTHORIZED':
+      // Check if OAuth is authorized
+      if (typeof twitchOauth !== 'undefined') {
+        twitchOauth.isAuthorized().then(authorized => {
+          sendResponse({ authorized: authorized });
+        }).catch(() => {
+          sendResponse({ authorized: false });
+        });
+      } else {
+        sendResponse({ authorized: false });
+      }
+      return true; // Keep message channel open for async response
+      
+    case 'AUTHORIZE':
+      // Trigger OAuth authorization
+      if (typeof twitchOauth !== 'undefined') {
+        twitchOauth.authorize(() => {});
+      }
+      break;
+      
+    case 'REVOKE':
+      // Revoke OAuth authorization
+      if (typeof twitchOauth !== 'undefined') {
+        twitchOauth.removeData();
+      }
       break;
   }
 });

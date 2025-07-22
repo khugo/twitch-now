@@ -11,25 +11,20 @@
     this.clientId = clientId;
     this.timeout = 10 * 1000;
     this.token = "";
-    // Use simple event system for service worker compatibility, fallback to Backbone.Events
-    if (typeof _ !== 'undefined' && typeof Backbone !== 'undefined') {
-      _.extend(this, Backbone.Events);
-    } else {
-      // Simple event system for service worker context
-      this._events = {};
-      this.on = function(event, callback) {
-        if (!this._events[event]) this._events[event] = [];
-        this._events[event].push(callback);
-      };
-      this.trigger = function(event) {
-        var args = Array.prototype.slice.call(arguments, 1);
-        if (this._events[event]) {
-          this._events[event].forEach(function(callback) {
-            callback.apply(this, args);
-          });
-        }
-      };
-    }
+    // Simple event system for Manifest V3
+    this._events = {};
+    this.on = function(event, callback) {
+      if (!this._events[event]) this._events[event] = [];
+      this._events[event].push(callback);
+    };
+    this.trigger = function(event) {
+      var args = Array.prototype.slice.call(arguments, 1);
+      if (this._events[event]) {
+        this._events[event].forEach(function(callback) {
+          callback.apply(this, args);
+        });
+      }
+    };
     this.listen();
   }
 
@@ -102,57 +97,36 @@
     console.log('userName: ' + userName)
     if ( userName ) return cb(null, userName);
 
-    // Use fetch API if available, fallback to jQuery
-    if (typeof fetch !== 'undefined') {
-      var params = _self.getRequestParams();
-      fetch(req.url, {
-        method: 'GET',
-        headers: params.headers,
-        signal: AbortSignal.timeout(params.timeout)
-      })
-      .then(function(response) {
-        if (response.status === 401) {
-          _self.revoke();
-          throw new Error('Unauthorized');
-        }
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.json();
-      })
-      .then(function(res) {
-        if (!res.data[0].display_name) {
-          return cb(err);
-        }
-        
-        _self.userId = res.data[0].id;
-        _self.userName = userName = res.data[0].display_name;
-        _self.trigger("userid");
-        return cb(null, userName);
-      })
-      .catch(function(error) {
+    // Use fetch API for Manifest V3
+    var params = _self.getRequestParams();
+    fetch(req.url, {
+      method: 'GET',
+      headers: params.headers,
+      signal: AbortSignal.timeout(params.timeout)
+    })
+    .then(function(response) {
+      if (response.status === 401) {
+        _self.revoke();
+        throw new Error('Unauthorized');
+      }
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then(function(res) {
+      if (!res.data[0].display_name) {
         return cb(err);
-      });
-    } else {
-      // Fallback to jQuery
-      $.ajax($.extend(true, req, _self.getRequestParams()))
-        .fail(function (xhr){
-          if ( xhr.status == 401 ) {
-            _self.revoke();
-          }
-          return cb(err);
-        })
-        .done(function (res){
-          if ( !res.data[0].display_name ) {
-            return cb(err);
-          }
-          
-          _self.userId = res.data[0].id;
-          _self.userName = userName = res.data[0].display_name;
-          _self.trigger("userid");
-          return cb(null, userName);
-        });
-    }
+      }
+      
+      _self.userId = res.data[0].id;
+      _self.userName = userName = res.data[0].display_name;
+      _self.trigger("userid");
+      return cb(null, userName);
+    })
+    .catch(function(error) {
+      return cb(err);
+    });
   }
 
   TwitchApi.prototype.send = function (methodName, opts, cb){
