@@ -99,6 +99,12 @@
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // Token expired or invalid - trigger revocation
+          console.log('[SW API] 401 Unauthorized - token expired, revoking');
+          // Note: We can't directly access twitchOauth here, so we'll throw a specific error
+          throw new Error(`HTTP 401: Token expired or invalid`);
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 

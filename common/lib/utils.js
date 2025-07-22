@@ -183,6 +183,92 @@
       }
     });
     
+    // Create User model proxy similar to original app.js
+    var UserModel = Backbone.Model.extend({
+      defaults: {
+        authenticated: false,
+        logo: utils.runtime.getURL("common/icons/default_userpic.png"),
+        name: ""
+      },
+      
+      initialize: function() {
+        var self = this;
+        console.log('[DEBUG] UserModel initializing...');
+        // Event listeners will be set up after backgroundProxy is created
+      },
+      
+      setupEventListeners: function(twitchApi) {
+        var self = this;
+        console.log('[DEBUG] UserModel: setting up event listeners');
+        
+        // Check if user is already authorized
+        twitchApi.isAuthorized().then(function(authorized) {
+          console.log('[DEBUG] Initial auth check result:', authorized);
+          if (authorized) {
+            self.set("authenticated", true);
+            self.populateUserInfo();
+          }
+        });
+        
+        // Listen for authorize events from twitchApi
+        twitchApi.on("authorize", function() {
+          console.log('[DEBUG] UserModel: authorize event received');
+          self.set("authenticated", true);
+          self.populateUserInfo();
+        });
+        
+        twitchApi.on("revoke", function() {
+          console.log('[DEBUG] UserModel: revoke event received');
+          self.set({
+            "authenticated": false,
+            "logo": self.defaults.logo,
+            "name": ""
+          });
+        });
+      },
+      
+      populateUserInfo: function() {
+        var self = this;
+        console.log('[DEBUG] UserModel: populateUserInfo called');
+        
+        // Send message to service worker to get user info
+        chrome.runtime.sendMessage({
+          type: 'GET_USER_INFO'
+        }, function(response) {
+          console.log('[DEBUG] GET_USER_INFO response:', response);
+          
+          if (response && response.status === 'ok' && response.user) {
+            self.set({
+              "logo": response.user.profile_image_url || self.defaults.logo,
+              "name": response.user.display_name || response.user.login || ""
+            });
+            console.log('[DEBUG] User info updated:', {
+              name: response.user.display_name,
+              logo: response.user.profile_image_url
+            });
+          }
+        });
+      },
+      
+      setTwitchApi: function(twitchApi) {
+        this.twitchApi = twitchApi;
+      },
+      
+      login: function() {
+        console.log('[DEBUG] UserModel.login() called');
+        if (this.twitchApi) {
+          this.twitchApi.authorize();
+        }
+      },
+      
+      logout: function() {
+        console.log('[DEBUG] UserModel.logout() called');
+        if (this.twitchApi) {
+          this.twitchApi.revoke();
+        }
+      }
+    });
+    
     // Create Badge model proxy similar to original app.js
     var BadgeModel = Backbone.Model.extend({
       defaults: {
@@ -841,7 +927,7 @@
           }
         }
       }),
-      user: new Backbone.Model()
+      user: new UserModel()
     };
     
     // Initialize collections that have initialize methods
@@ -850,6 +936,12 @@
     }
     if (backgroundProxy.following && backgroundProxy.following.initialize) {
       backgroundProxy.following.initialize();
+    }
+    
+    // Set up user model with twitchApi reference and event listeners
+    if (backgroundProxy.user && backgroundProxy.user.setupEventListeners) {
+      backgroundProxy.user.setTwitchApi(backgroundProxy.twitchApi);
+      backgroundProxy.user.setupEventListeners(backgroundProxy.twitchApi);
     }
     
     // Listen for background stream updates from service worker
@@ -866,6 +958,29 @@
         if (message.streams && backgroundProxy.following) {
           console.log('[DEBUG] Syncing following collection with background data');
           backgroundProxy.following.reset(message.streams);
+        }
+      } else if (message.type === 'AUTH_EXPIRED') {
+        // Handle token expiration from service worker
+        console.log('[DEBUG] Received auth expiration notification from service worker');
+        
+        // Update user model to reflect expired authentication
+        if (backgroundProxy.user) {
+          backgroundProxy.user.set({
+            "authenticated": false,
+            "logo": backgroundProxy.user.defaults.logo,
+            "name": ""
+          });
+          console.log('[DEBUG] User model updated - authentication expired');
+        }
+        
+        // Clear following collection since user is no longer authenticated
+        if (backgroundProxy.following) {
+          backgroundProxy.following.reset([]);
+        }
+        
+        // Clear badge count
+        if (backgroundProxy.badge) {
+          backgroundProxy.badge.set("count", 0);
         }
       }
     });

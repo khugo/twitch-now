@@ -15,7 +15,7 @@
   var _baron;
 
   app.twitchApi = b.twitchApi;
-  console.log('[DEBUG] Set app.twitchApi to:', JSON.stringify(app.twitchApi, null, 0));
+  console.log('[DEBUG] Set app.twitchApi to:', typeof app.twitchApi, '(circular structure, cannot stringify)');
   app.currentView = null;
   app.views = {};
   app.windowOpened = false;

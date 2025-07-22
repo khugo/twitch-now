@@ -171,6 +171,7 @@ bgApp.checkForNewStreams = async function() {
     
     // Use callback style for better error handling
     twitchApi.getFollowedStreams(async (error, data) => {
+      if (bgApp.handleAuthError(error)) return; // DRY auth handling
       if (error) {
         console.error('[SW] Error fetching followed streams in background:', error);
         return;
@@ -216,6 +217,33 @@ bgApp.startPeriodicChecking = function() {
     delayInMinutes: 0.1, // First check in 6 seconds (0.1 minutes)
     periodInMinutes: 5 // Check every 5 minutes after that
   });
+};
+
+// Centralized auth error handler
+bgApp.handleAuthError = function(error) {
+  if (error && error.message && error.message.includes('401')) {
+    console.log('[SW] Token expired, handling auth expiration...');
+    
+    // Clear the token
+    if (typeof twitchOauth !== 'undefined') {
+      twitchOauth.removeData();
+    }
+    
+    // Clear badge since user is no longer authenticated
+    bgApp.clearBadge();
+    
+    // Notify popup that authentication expired
+    chrome.runtime.sendMessage({
+      type: 'AUTH_EXPIRED'
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.log('[SW] Popup not available for auth expiration notification');
+      }
+    });
+    
+    return true; // Indicates auth error was handled
+  }
+  return false; // Not an auth error
 };
 
 // Initialize OAuth adapter
@@ -372,6 +400,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           
           // Use the real TwitchApi to get followed streams
           twitchApi.getFollowedStreams((error, data) => {
+            if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
               console.log('[SW] GET_FOLLOWED_STREAMS error:', JSON.stringify(error, null, 0));
               sendResponse({
@@ -417,6 +446,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           
           // Use the TwitchApi to get top games
           twitchApi.getTopGames((error, data) => {
+            if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
               console.log('[SW] GET_TOP_GAMES error:', JSON.stringify(error, null, 0));
               sendResponse({
@@ -462,6 +492,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           
           // Use the TwitchApi to get streams for the game
           twitchApi.getGameStreams(message.gameId, (error, data) => {
+            if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
               console.log('[SW] GET_GAME_STREAMS error:', JSON.stringify(error, null, 0));
               sendResponse({
@@ -507,6 +538,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           
           // Use the TwitchApi to get top streams
           twitchApi.getTopStreams((error, data) => {
+            if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
               console.log('[SW] GET_TOP_STREAMS error:', JSON.stringify(error, null, 0));
               sendResponse({
@@ -561,6 +593,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           
           // Use the TwitchApi to search streams
           twitchApi.searchStreams(message.query, (error, data) => {
+            if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
               console.log('[SW] SEARCH_STREAMS error:', JSON.stringify(error, null, 0));
               sendResponse({
@@ -585,6 +618,51 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       }).catch(error => {
         console.log('[SW] Error getting access token for search:', JSON.stringify(error, null, 0));
+        sendResponse({
+          status: 'error',
+          error: 'Failed to get access token'
+        });
+      });
+      return true; // Keep sendResponse available for async response
+      break;
+      
+    case 'GET_USER_INFO':
+      // Handle user info request
+      console.log('[SW] GET_USER_INFO message received');
+      
+      // Get OAuth token and call TwitchApi
+      twitchOauth.getAccessToken().then(accessToken => {
+        console.log('[SW] Retrieved access token for user info:', accessToken ? 'found' : 'not found');
+        if (accessToken) {
+          twitchApi.setToken(accessToken);
+          console.log('[SW] Set token on TwitchApi, calling getUserInfo');
+          
+          // Use the TwitchApi to get user info
+          twitchApi.getUserInfo((error, userData) => {
+            if (bgApp.handleAuthError(error)) return; // DRY auth handling
+            if (error) {
+              console.log('[SW] GET_USER_INFO error:', JSON.stringify(error, null, 0));
+              sendResponse({
+                status: 'error',
+                error: error.message || 'Failed to get user info'
+              });
+            } else {
+              console.log('[SW] GET_USER_INFO success:', userData ? 'user data received' : 'no data');
+              sendResponse({
+                status: 'ok',
+                user: userData || {}
+              });
+            }
+          });
+        } else {
+          console.log('[SW] No access token available for user info');
+          sendResponse({
+            status: 'error',
+            error: 'Not authorized - no access token'
+          });
+        }
+      }).catch(error => {
+        console.log('[SW] Error getting access token for user info:', JSON.stringify(error, null, 0));
         sendResponse({
           status: 'error',
           error: 'Failed to get access token'
