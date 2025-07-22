@@ -214,7 +214,35 @@
         }
       }),
       videos: new Backbone.Collection(),
-      search: new Backbone.Collection(),
+      search: _.extend(new Backbone.Collection(), {
+        query: null,
+        update: function() {
+          console.log('[DEBUG] search collection update() called with query:', this.query);
+          if (!this.query) {
+            console.log('[DEBUG] No search query provided');
+            this.reset([]);
+            return;
+          }
+          
+          chrome.runtime.sendMessage({ 
+            type: 'SEARCH_STREAMS',
+            query: this.query
+          }, (response) => {
+            console.log('[DEBUG] SEARCH_STREAMS response:', JSON.stringify(response, null, 0));
+            
+            if (response && response.status === 'ok' && response.streams) {
+              console.log('[DEBUG] Adding', response.streams.length, 'search results to collection');
+              this.reset(response.streams);
+              console.log('[DEBUG] Search collection after reset:', this.length, 'results');
+            } else {
+              console.log('[DEBUG] No search results in response or error occurred');
+              this.reset([]);
+            }
+            
+            console.log('[DEBUG] Search collection reset completed');
+          });
+        }
+      }),
       games: _.extend(new Backbone.Collection(), {
         update: function() {
           console.log('[DEBUG] games collection update() called');
@@ -236,7 +264,288 @@
           });
         }
       }),
-      settings: new Backbone.Collection(),
+      settings: (() => {
+        // Create a proxy for the Settings collection since we can't access app.js directly
+        // The actual Settings collection needs to be populated with default settings
+        const settingsProxy = new Backbone.Collection();
+        
+        // Complete default settings from app.js - maintaining full functionality
+        const defaultSettings = [
+          {
+            id: "streamLanguage2",
+            desc: "Stream Language",
+            type: "select",
+            select: true,
+            opts: [
+              { "id": "any", "name": "Any" },
+              { "id": "ru", "name": "Русский" },
+              { "id": "en", "name": "English" },
+              { "id": "da", "name": "Dansk" },
+              { "id": "de", "name": "Deutsch" },
+              { "id": "es", "name": "Español" },
+              { "id": "fr", "name": "Français" },
+              { "id": "it", "name": "Italiano" },
+              { "id": "hu", "name": "Magyar" },
+              { "id": "nl", "name": "Nederlands" },
+              { "id": "no", "name": "Norsk" },
+              { "id": "pl", "name": "Polski" },
+              { "id": "pt", "name": "Português" },
+              { "id": "sk", "name": "Slovenčina" },
+              { "id": "fi", "name": "Suomi" },
+              { "id": "sv", "name": "Svenska" },
+              { "id": "vi", "name": "Tiếng Việt" },
+              { "id": "tr", "name": "Türkçe" },
+              { "id": "cs", "name": "Čeština" },
+              { "id": "el", "name": "Ελληνικά" },
+              { "id": "bg", "name": "Български" },
+              { "id": "ar", "name": "العربية" },
+              { "id": "th", "name": "ภาษาไทย" },
+              { "id": "zh", "name": "中文" },
+              { "id": "ja", "name": "日本語" },
+              { "id": "ko", "name": "한국어" },
+              { "id": "asl", "name": "American Sign Language" },
+              { "id": "other", "name": "Other" }
+            ],
+            show: true,
+            value: 'any'
+          },
+          {
+            id: "windowHeight",
+            desc: "Window Height",
+            range: true,
+            show: false,
+            type: "range",
+            tip: "px",
+            min: 360,
+            max: 590,
+            value: 590
+          },
+          {
+            id: "defaultTab",
+            desc: "Default Tab",
+            type: "select",
+            select: true,
+            opts: [
+              { id: "following", name: "Following" },
+              { id: "browse", name: "Browse" },
+              { id: "topstreams", name: "Top Streams" }
+            ],
+            show: true,
+            value: "following"
+          },
+          {
+            id: "viewSort",
+            desc: "Sort Streams By",
+            type: "select",
+            select: true,
+            opts: [
+              { id: "viewer_count|1", name: "Viewers (Low to High)" },
+              { id: "viewer_count|-1", name: "Viewers (High to Low)" },
+              { id: "user_login|1", name: "Name (A to Z)" },
+              { id: "user_login|-1", name: "Name (Z to A)" },
+              { id: "game_name|1", name: "Game (A to Z)" },
+              { id: "started_at|-1", name: "Recently Started" }
+            ],
+            show: true,
+            value: "viewer_count|-1"
+          },
+          {
+            id: "themeType",
+            desc: "Theme",
+            type: "radio",
+            radio: true,
+            opts: [
+              { id: "dark", name: "Dark" },
+              { id: "white", name: "Light" }
+            ],
+            show: true,
+            value: "white"
+          },
+          {
+            id: "simpleView",
+            desc: "Simple View",
+            checkbox: true,
+            type: "checkbox",
+            show: true,
+            value: false
+          },
+          {
+            id: "openStreamIn",
+            desc: "Open Stream In",
+            type: "radio",
+            radio: true,
+            opts: [
+              { id: "newlayout", name: "New Tab" },
+              { id: "popout", name: "Popout" },
+              { id: "theatrelayout", name: "Theatre Mode" },
+              { id: "html5", name: "HTML5 Player" }
+            ],
+            show: true,
+            value: "newlayout"
+          },
+          {
+            id: "openChatIn",
+            desc: "Open Chat In",
+            type: "radio",
+            radio: true,
+            opts: [
+              { id: "newwindow", name: "New Window" },
+              { id: "newtab", name: "New Tab" }
+            ],
+            show: true,
+            value: "newwindow"
+          },
+          {
+            id: "showBadge",
+            desc: "Show Badge",
+            checkbox: true,
+            type: "checkbox",
+            show: true,
+            value: true
+          },
+          {
+            id: "hideVodcasts",
+            desc: "Hide Vodcasts",
+            checkbox: true,
+            type: "checkbox",
+            show: false,
+            value: false
+          },
+          {
+            id: "showDesktopNotification",
+            desc: "Show Desktop Notifications",
+            checkbox: true,
+            type: "checkbox",
+            show: true,
+            value: true
+          },
+          {
+            id: "invertNotification",
+            desc: "Invert Notification Logic",
+            checkbox: true,
+            type: "checkbox",
+            show: true,
+            value: true
+          },
+          {
+            id: "notifyCount",
+            desc: "Number of Notifications",
+            type: "select",
+            select: true,
+            opts: [
+              { id: "0", name: "0" },
+              { id: "1", name: "1" },
+              { id: "2", name: "2" },
+              { id: "3", name: "3" },
+              { id: "4", name: "4" },
+              { id: "5", name: "5" }
+            ],
+            show: true,
+            value: "0"
+          },
+          {
+            id: "closeNotificationDelay",
+            desc: "Close Notification Delay",
+            range: true,
+            type: "range",
+            tip: "sec",
+            min: 5,
+            value: 8,
+            max: 60
+          },
+          {
+            id: "playNotificationSound",
+            desc: "Play Notification Sound",
+            checkbox: true,
+            show: true,
+            type: "checkbox",
+            value: false
+          },
+          {
+            id: "loopNotificationSound",
+            desc: "Loop Notification Sound",
+            checkbox: true,
+            show: false,
+            type: "checkbox",
+            value: false
+          },
+          {
+            id: "notificationSound",
+            desc: "Notification Sound",
+            type: "radio",
+            radio: true,
+            show: true,
+            opts: [
+              { id: "common/audio/ding.ogg", name: "ding" },
+              { id: "common/audio/chime.mp3", name: "chime" },
+              { id: "common/audio/click.wav", name: "click" },
+              { id: "customsound", name: "Custom Sound" }
+            ],
+            value: "common/audio/ding.ogg"
+          },
+          {
+            id: "notificationVolume",
+            desc: "Notification Volume",
+            range: true,
+            show: true,
+            type: "range",
+            tip: "%",
+            min: 1,
+            max: 100,
+            value: 100
+          },
+          {
+            id: "customNotificationSound",
+            desc: "Upload Custom Sound",
+            button: true,
+            show: true,
+            type: "button",
+            value: ""
+          },
+          {
+            id: "refreshInterval",
+            desc: "Refresh Interval",
+            range: true,
+            show: true,
+            type: "range",
+            tip: "min",
+            min: 1,
+            max: 60,
+            value: 5
+          },
+          {
+            id: "livestreamerQuality",
+            desc: "Livestreamer Quality",
+            type: "select",
+            select: true,
+            opts: [
+              { id: "source", name: "source" },
+              { id: "high", name: "high" },
+              { id: "low", name: "low" },
+              { id: "medium", name: "medium" },
+              { id: "mobile", name: "mobile" }
+            ],
+            show: true,
+            value: "source"
+          },
+          {
+            id: "livestreamerPath",
+            desc: "Livestreamer Path",
+            type: "text",
+            text: true,
+            show: true,
+            value: ""
+          }
+        ];
+        
+        // Add models to the collection
+        defaultSettings.forEach(setting => {
+          settingsProxy.add(new Backbone.Model(setting));
+        });
+        
+        console.log('[DEBUG] Settings collection initialized with', settingsProxy.length, 'settings');
+        return settingsProxy;
+      })(),
       contributors: new Backbone.Collection(),
       toppedgames: new Backbone.Collection(),
       liveStreams: new Backbone.Collection(),
@@ -377,7 +686,8 @@
       games: backgroundProxy.games.length,
       following: backgroundProxy.following.length,
       gameStreams: backgroundProxy.gameStreams.length,
-      topstreams: backgroundProxy.topstreams.length
+      topstreams: backgroundProxy.topstreams.length,
+      search: backgroundProxy.search.length
     });
     
     return backgroundProxy;

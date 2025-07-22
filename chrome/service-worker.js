@@ -493,6 +493,60 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true; // Keep sendResponse available for async response
       break;
+      
+    case 'SEARCH_STREAMS':
+      // Handle search streams request
+      console.log('[SW] SEARCH_STREAMS message received with query:', message.query);
+      
+      if (!message.query) {
+        console.log('[SW] No search query provided');
+        sendResponse({
+          status: 'error',
+          error: 'Search query is required'
+        });
+        return;
+      }
+      
+      // Get OAuth token and call TwitchApi
+      twitchOauth.getAccessToken().then(accessToken => {
+        console.log('[SW] Retrieved access token for search:', accessToken ? 'found' : 'not found');
+        if (accessToken) {
+          twitchApi.setToken(accessToken);
+          console.log('[SW] Set token on TwitchApi, calling searchStreams');
+          
+          // Use the TwitchApi to search streams
+          twitchApi.searchStreams(message.query, (error, data) => {
+            if (error) {
+              console.log('[SW] SEARCH_STREAMS error:', JSON.stringify(error, null, 0));
+              sendResponse({
+                status: 'error',
+                error: error.message || 'Failed to search streams'
+              });
+            } else {
+              console.log('[SW] SEARCH_STREAMS success, results count:', data && data.data ? data.data.length : 0);
+              sendResponse({
+                status: 'ok',
+                streams: data && data.data ? data.data : [],
+                total: data && data.total ? data.total : 0
+              });
+            }
+          });
+        } else {
+          console.log('[SW] No access token available for search');
+          sendResponse({
+            status: 'error',
+            error: 'Not authorized - no access token'
+          });
+        }
+      }).catch(error => {
+        console.log('[SW] Error getting access token for search:', JSON.stringify(error, null, 0));
+        sendResponse({
+          status: 'error',
+          error: 'Failed to get access token'
+        });
+      });
+      return true; // Keep sendResponse available for async response
+      break;
   }
 });
 

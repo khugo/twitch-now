@@ -240,6 +240,70 @@
     }
   };
 
+  TwitchApi.prototype.searchStreams = async function(searchQuery, callback) {
+    if (!this.isAuthorized()) {
+      const error = new Error('Not authorized');
+      if (callback) callback(error);
+      throw error;
+    }
+
+    if (!searchQuery) {
+      const error = new Error('Search query is required');
+      if (callback) callback(error);
+      throw error;
+    }
+
+    try {
+      // Use search/channels endpoint as that's what actually exists
+      const data = await this.send('search/channels', { query: searchQuery });
+      
+      // Filter only live channels and transform to match stream format
+      if (data && data.data) {
+        const liveChannels = data.data.filter(channel => channel.is_live);
+        
+        // Transform channel data to match stream format expected by the UI
+        const transformedStreams = liveChannels.map(channel => ({
+          id: channel.id,
+          user_id: channel.id,
+          user_name: channel.broadcaster_login,
+          user_login: channel.broadcaster_login,
+          game_id: channel.game_id,
+          game_name: channel.game_name,
+          type: 'live',
+          title: channel.title,
+          viewer_count: 0, // Channel search doesn't provide viewer count
+          started_at: channel.started_at || new Date().toISOString(),
+          language: channel.broadcaster_language || 'en',
+          thumbnail_url: `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel.broadcaster_login}-{width}x{height}.jpg`,
+          tag_ids: [],
+          is_mature: false,
+          // Additional channel-specific fields
+          name: channel.display_name,
+          display_name: channel.display_name,
+          profile_image_url: ''
+        }));
+        
+        const processedData = {
+          data: transformedStreams,
+          pagination: data.pagination || {}
+        };
+        
+        // Process thumbnails using existing function
+        const finalData = this.processStreamThumbnails(processedData);
+        
+        if (callback) callback(null, finalData);
+        return finalData;
+      } else {
+        const emptyData = { data: [], pagination: {} };
+        if (callback) callback(null, emptyData);
+        return emptyData;
+      }
+    } catch (err) {
+      if (callback) callback(err);
+      throw err;
+    }
+  };
+
   // Make TwitchApi available globally
   if (typeof self !== 'undefined') {
     self.TwitchApi = TwitchApi;
