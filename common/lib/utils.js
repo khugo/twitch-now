@@ -183,7 +183,7 @@
       }
     });
     
-    // Create User model proxy similar to original app.js
+    // Create User model proxy for authentication UI
     var UserModel = Backbone.Model.extend({
       defaults: {
         authenticated: false,
@@ -269,7 +269,7 @@
       }
     });
     
-    // Create Badge model proxy similar to original app.js
+    // Create Badge model proxy for chrome extension badge
     var BadgeModel = Backbone.Model.extend({
       defaults: {
         count: 0
@@ -473,7 +473,7 @@
         }
       }),
       settings: (() => {
-        // Create a proxy for the Settings collection since we can't access app.js directly
+        // Create a proxy for the Settings collection with persistence
         // The actual Settings collection needs to be populated with default settings
         const settingsProxy = _.extend(new Backbone.Collection(), {
           // Add storage functionality like the original Settings collection
@@ -487,7 +487,7 @@
           }
         });
         
-        // Complete default settings from app.js - maintaining full functionality
+        // Complete default settings - maintaining full functionality
         const defaultSettings = [
           {
             id: "streamLanguage2",
