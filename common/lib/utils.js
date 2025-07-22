@@ -108,8 +108,8 @@
           chrome.runtime.sendMessage({ type: 'SEND_NOTIFICATION', streams: streams });
         }
       },
-      // Proxy for twitchApi
-      twitchApi: {
+      // Proxy for twitchApi - make it compatible with existing popup code
+      twitchApi: _.extend({
         isAuthorized: function() {
           return new Promise((resolve) => {
             chrome.runtime.sendMessage({ type: 'IS_AUTHORIZED' }, (response) => {
@@ -122,8 +122,15 @@
         },
         revoke: function() {
           chrome.runtime.sendMessage({ type: 'REVOKE' });
-        }
-      }
+        },
+        // Add other properties that popup code expects
+        token: '',
+        userName: '',
+        userId: '',
+        clientId: '',
+        basePath: "https://api.twitch.tv/helix",
+        timeout: 10 * 1000
+      }, Backbone.Events)
     };
   }
 
