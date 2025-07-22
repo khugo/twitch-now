@@ -118,9 +118,18 @@
     });
   };
 
-  that.addAdapter = function(id, opts, flow) {
+  that.addAdapter = function(config) {
+    console.log('[SW] OAuth2.addAdapter called with:', JSON.stringify(config, null, 0));
+    
+    const id = config.id;
+    const opts = config.opts;
+    const flow = config.codeflow;
+    
+    console.log('[SW] Parsed - id:', id, 'opts:', JSON.stringify(opts, null, 0), 'flow:', JSON.stringify(flow, null, 0));
+    
     const adapter = new Adapter(id, opts, flow);
     that._adapters[id] = adapter;
+    console.log('[SW] OAuth2 adapter created successfully');
     return adapter;
   };
 
@@ -128,5 +137,10 @@
   if (typeof self !== 'undefined') {
     self.OAuth2 = that;
   }
+  
+  // Also make it available in global scope for service worker
+  if (typeof globalThis !== 'undefined') {
+    globalThis.OAuth2 = that;
+  }
 
-}).call(this);
+}).call(self);

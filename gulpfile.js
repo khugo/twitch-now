@@ -48,7 +48,8 @@ gulp.task('copy:chrome', function () {
 
   var c3 = gulp
     .src([
-      'chrome/**'
+      'chrome/**',
+      '!chrome/service-worker.js'  // Exclude individual service worker file since we concatenate it
     ])
     .pipe(gulp.dest('build/chrome/'))
 
@@ -85,7 +86,6 @@ gulp.task('concat:serviceworker', function () {
     "common/lib/3rd/eventemitter.js",
     "common/lib/utils-sw.js",
     "common/lib/oauth2-sw.js",
-    "chrome/background.js",
     "common/lib/twitch-api-sw.js",
     "common/lib/onerror-sw.js",
     "chrome/service-worker.js"

@@ -2,11 +2,16 @@
   "use strict";
 
   var app = window.app = _.extend({}, Backbone.Events);
+  console.log('[DEBUG] Creating app with Backbone.Events');
+  
   var b = app.b = utils._getBackgroundPage();
+  console.log('[DEBUG] Got background page:', JSON.stringify(b, null, 0));
+  console.log('[DEBUG] Background page twitchApi:', JSON.stringify(b.twitchApi, null, 0));
+  
   var _baron;
 
-
   app.twitchApi = b.twitchApi;
+  console.log('[DEBUG] Set app.twitchApi to:', JSON.stringify(app.twitchApi, null, 0));
   app.currentView = null;
   app.views = {};
   app.windowOpened = false;
@@ -101,11 +106,13 @@
       }
     });
 
+    console.log('[DEBUG] Creating notifications view with collection:', JSON.stringify(b.notifications, null, 0));
     views.notifications = new ChannelNotificationListView({
       el        : "#notifications-screen",
       collection: b.notifications
     })
 
+    console.log('[DEBUG] Creating followedGames view with collection:', JSON.stringify(b.followedgames, null, 0));
     views.followedGames = new GameListView({
       el        : "#followed-game-screen",
       collection: b.followedgames,
@@ -117,6 +124,10 @@
       }
     })
 
+    console.log('[DEBUG] Creating followedChannels view with collection:', JSON.stringify(b.followedChannels, null, 0));
+    console.log('[DEBUG] followedChannels type:', typeof b.followedChannels);
+    console.log('[DEBUG] followedChannels constructor:', b.followedChannels.constructor.name);
+    console.log('[DEBUG] followedChannels instanceof Backbone.Collection:', b.followedChannels instanceof Backbone.Collection);
     new FollowedChannelsView({
       el        : "#followed-channels-screen",
       collection: b.followedChannels,
@@ -163,6 +174,9 @@
       collection: b.topstreams
     });
 
+    console.log('[DEBUG] Creating following streams view with collection:', JSON.stringify(b.following, null, 0));
+    console.log('[DEBUG] b.following type:', typeof b.following);
+    console.log('[DEBUG] b.following length:', b.following ? b.following.length : 'undefined');
     views.following = new FollowingStreamsView({
       el                : "#stream-screen",
       collection        : b.following,
@@ -173,6 +187,26 @@
           text  : "__MSG_m109__"
         }
       }
+    });
+
+    // Check if we're already authorized when popup opens
+    console.log('[DEBUG] Checking authorization status on popup open');
+    app.twitchApi.isAuthorized().then((authorized) => {
+      console.log('[DEBUG] Initial auth check result:', JSON.stringify(authorized, null, 0));
+      if (authorized) {
+        console.log('[DEBUG] Already authorized! Triggering authorize event on popup open');
+        app.twitchApi.trigger('authorize');
+        
+        // Also trigger collection updates
+        if (b.following && b.following.update) {
+          console.log('[DEBUG] Triggering following collection update on popup open');
+          b.following.update();
+        }
+      } else {
+        console.log('[DEBUG] Not yet authorized on popup open');
+      }
+    }).catch((error) => {
+      console.log('[DEBUG] Error checking initial auth status:', JSON.stringify(error, null, 0));
     });
 
     views.videos = new VideoListView({
@@ -296,7 +330,41 @@
       this.render();
     },
     login     : function (){
-      this.model.login();
+      console.log('[DEBUG] Login button clicked');
+      console.log('[DEBUG] this.model type:', typeof this.model);
+      console.log('[DEBUG] this.model.login exists:', typeof this.model.login);
+      console.log('[DEBUG] app exists:', typeof app);
+      console.log('[DEBUG] app.twitchApi exists:', typeof app.twitchApi);
+      console.log('[DEBUG] app.twitchApi.authorize exists:', typeof app.twitchApi.authorize);
+      if (typeof this.model.login === 'function') {
+        console.log('[DEBUG] Calling this.model.login()');
+        this.model.login();
+      } else {
+        console.log('[DEBUG] this.model.login is not a function, calling app.twitchApi.authorize() directly');
+        console.log('[DEBUG] app.twitchApi type:', typeof app.twitchApi);
+        console.log('[DEBUG] app.twitchApi.authorize type:', typeof app.twitchApi.authorize);
+        console.log('[DEBUG] About to call app.twitchApi.authorize()');
+        app.twitchApi.authorize();
+        console.log('[DEBUG] app.twitchApi.authorize() called');
+        
+        // Add callback to check what happens after authorization
+        console.log('[DEBUG] Adding listeners for after authorization');
+        console.log('[DEBUG] app.twitchApi.on available:', typeof app.twitchApi.on);
+        if (app.twitchApi.on) {
+          console.log('[DEBUG] Setting up authorize event listener');
+          app.twitchApi.on('authorize', function() {
+            console.log('[DEBUG] AUTHORIZE EVENT RECEIVED IN LOGIN!');
+            console.log('[DEBUG] b.following after auth:', JSON.stringify(b.following ? b.following.length : 'undefined', null, 0));
+          });
+          
+          app.twitchApi.on('change:authorized', function() {
+            console.log('[DEBUG] CHANGE:AUTHORIZED EVENT RECEIVED IN LOGIN!');
+            console.log('[DEBUG] b.following after auth change:', JSON.stringify(b.following ? b.following.length : 'undefined', null, 0));
+          });
+        } else {
+          console.log('[DEBUG] app.twitchApi.on not available for event listening');
+        }
+      }
     },
     logout    : function (){
       this.model.logout();
@@ -426,10 +494,34 @@
       t.siblings(".range-helper").find(".range-helper-value").html(t.val());
     },
     initialize : function (){
+      console.log('[DEBUG] SettingsView.initialize called');
+      console.log('[DEBUG] this.collection:', JSON.stringify(this.collection, null, 0));
+      console.log('[DEBUG] Collection length:', this.collection.length);
+      
       LazyRenderView.prototype.initialize.apply(this, arguments);
-      this.setDefaultTab(this.collection.get("defaultTab").get("value"));
-      this.changeThemeType(this.collection.get("themeType").get("value"));
-      this.toggleSimpleView(this.collection.get("simpleView").get("value"));
+      
+      // Check if settings exist before trying to access them
+      var defaultTab = this.collection.get("defaultTab");
+      var themeType = this.collection.get("themeType");
+      var simpleView = this.collection.get("simpleView");
+      
+      console.log('[DEBUG] defaultTab model:', JSON.stringify(defaultTab, null, 0));
+      console.log('[DEBUG] themeType model:', JSON.stringify(themeType, null, 0));
+      console.log('[DEBUG] simpleView model:', JSON.stringify(simpleView, null, 0));
+      
+      if (defaultTab) {
+        this.setDefaultTab(defaultTab.get("value"));
+      } else {
+        // Default to following tab if no setting is found
+        console.log('[DEBUG] No defaultTab setting found, defaulting to following');
+        this.setDefaultTab("following");
+      }
+      if (themeType) {
+        this.changeThemeType(themeType.get("value"));
+      }
+      if (simpleView) {
+        this.toggleSimpleView(simpleView.get("value"));
+      }
 
       this.$container = this.$el.find("#settings-container");
       this.listenTo(this.collection, "change", this.onModelChange);
@@ -661,20 +753,45 @@
     },
     itemView      : null, // single item view
     initialize    : function (opts){
+      console.log('[DEBUG] ListView.initialize called with opts:', JSON.stringify(opts, null, 0));
+      console.log('[DEBUG] this.collection before setup:', JSON.stringify(this.collection, null, 0));
+      console.log('[DEBUG] opts.collection:', JSON.stringify(opts.collection, null, 0));
+      console.log('[DEBUG] opts.collection type:', typeof opts.collection);
+      console.log('[DEBUG] opts.collection instanceof Backbone.Collection:', opts.collection instanceof Backbone.Collection);
+      
       LazyRenderView.prototype.initialize.apply(this, arguments);
       this.container = opts.container || this.$el.children(".screen-content");
       this.messages = $.extend({}, this.messages, opts.messages);
       this.currentMessage = null;
-      this.listenTo(this.collection, "remove update sort reset", this.render.bind(this, null));
-      this.listenTo(this.collection, "_error", this.showMessage.bind(this));
-      this.listenTo(this.collection, "add addarray", this.render.bind(this));
+      
+      // Use opts.collection instead of this.collection since Backbone hasn't set it yet
+      var collection = opts.collection || this.collection;
+      console.log('[DEBUG] Using collection:', JSON.stringify(collection, null, 0));
+      console.log('[DEBUG] Collection has _listenId?', collection && '_listenId' in collection);
+      
+      if (!collection) {
+        console.error('[DEBUG] No collection provided to ListView!');
+        return;
+      }
+      
+      this.listenTo(collection, "remove update sort reset", function() {
+        console.log('[DEBUG] ListView got reset/update/sort event, calling render');
+        this.render(null);
+      }.bind(this));
+      this.listenTo(collection, "_error", this.showMessage.bind(this));
+      this.listenTo(collection, "add addarray", function() {
+        console.log('[DEBUG] ListView got add/addarray event, calling render');
+        this.render();
+      }.bind(this));
       if ( opts.preloaderOnUpdate ) {
-        this.listenTo(this.collection, "update-status", function (isUpdating, opts){
+        this.listenTo(collection, "update-status", function (isUpdating, opts){
           if ( isUpdating && opts.reset ) {
             this.container.empty().append(this.app.preloader);
           }
         }.bind(this));
       }
+      
+      console.log('[DEBUG] ListView.initialize completed');
     },
     onMessageClick: function (){
       if ( this.currentMessage.onclick ) {
@@ -698,24 +815,45 @@
       this.collection.update();
     },
     render        : function (models){
+      console.log('[DEBUG] ListView.render called with models:', models ? 'provided' : 'null');
+      console.log('[DEBUG] this.collection in render:', this.collection ? this.collection.length : 'undefined');
+      
       var elementsToRender = [];
       if ( models ) {
         elementsToRender = Array.isArray(models) ? models : [models];
       } else {
         elementsToRender = this.collection;
         if ( !elementsToRender.length ) {
+          console.log('[DEBUG] No elements to render, showing noresults message');
           return this.showMessage("noresults");
         }
       }
+      
+      console.log('[DEBUG] Elements to render:', elementsToRender.length);
 
+      console.log('[DEBUG] Creating', elementsToRender.length, 'views using itemView:', this.itemView);
       var views = elementsToRender.map(function (item){
-        return new this.itemView({model: item}).render().$el;
+        console.log('[DEBUG] Creating view for item:', typeof item, item.id || 'no-id');
+        var view = new this.itemView({model: item}).render();
+        console.log('[DEBUG] View created:', !!view, 'with $el:', !!view.$el);
+        return view.$el;
       }, this);
+      console.log('[DEBUG] All views created, count:', views.length);
+      
+      console.log('[DEBUG] Container element:', this.container.length, 'selector:', this.container.selector);
+      console.log('[DEBUG] Container HTML before update:', this.container.html().length, 'chars');
+      
       if ( models ) {
+        console.log('[DEBUG] Appending views to container');
         this.container.append($(document.createDocumentFragment()).html(views));
       } else {
+        console.log('[DEBUG] Replacing container content with views');
         this.container.empty().html(views);
       }
+      
+      console.log('[DEBUG] Container HTML after update:', this.container.html().length, 'chars');
+      console.log('[DEBUG] Container children count:', this.container.children().length);
+      console.log('[DEBUG] DOM update completed');
     }
   });
 
@@ -825,6 +963,10 @@
     showOfflineChannels: false,
     channelsCollection : null,
     initialize         : function (opts){
+      console.log('[DEBUG] FollowingStreamsView.initialize called');
+      console.log('[DEBUG] opts.collection:', opts.collection ? opts.collection.length : 'undefined');
+      console.log('[DEBUG] app.twitchApi.isAuthorized():', app.twitchApi.isAuthorized());
+      
       StreamListView.prototype.initialize.apply(this, arguments);
       _.extend(this.events, StreamListView.prototype.events);
 
@@ -838,9 +980,25 @@
         this.$loadBtn.addClass('hide');
       }
 
+      console.log('[DEBUG] Setting up authorize event listener on app.twitchApi');
+      console.log('[DEBUG] app.twitchApi in FollowingStreamsView has on method:', typeof app.twitchApi.on);
       this.listenTo(app.twitchApi, "authorize", function (){
+        console.log('[DEBUG] FollowingStreamsView: authorize event received!!!');
+        console.log('[DEBUG] Collection length after authorize:', this.collection.length);
+        console.log('[DEBUG] Collection has update method:', typeof this.collection.update);
         this.$loadBtn.removeClass('hide');
+        console.log('[DEBUG] Removed hide class from load button');
+        
+        // Try to trigger an update of the collection after authorization
+        if (this.collection && this.collection.update) {
+          console.log('[DEBUG] Triggering collection update after authorization');
+          console.log('[DEBUG] Collection update function type:', typeof this.collection.update);
+          this.collection.update();
+        } else {
+          console.log('[DEBUG] Collection or update function not available:', JSON.stringify({collection: !!this.collection, update: !!(this.collection && this.collection.update)}, null, 0));
+        }
       }.bind(this));
+      console.log('[DEBUG] authorize event listener set up complete');
 
       this.listenTo(app.twitchApi, "revoke", function (){
         this.$loadBtn.addClass('hide');
@@ -863,6 +1021,8 @@
       }.bind(this));
 
       this.listenTo(this.collection, "update", function (){
+        console.log('[DEBUG] FollowingStreamsView: collection update event received');
+        console.log('[DEBUG] Collection length after update:', this.collection.length);
         this.$channels.removeClass('hide');
       }.bind(this));
 

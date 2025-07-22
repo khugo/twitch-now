@@ -98,11 +98,49 @@
     }
   };
 
+  TwitchApi.prototype.getUserInfo = async function(callback) {
+    if (!this.token) {
+      const error = new Error('Not authorized - no token');
+      if (callback) callback(error);
+      throw error;
+    }
+
+    try {
+      const data = await this.send('users');
+      if (data && data.data && data.data[0]) {
+        this.userId = data.data[0].id;
+        this.userName = data.data[0].display_name;
+        console.log('[SW] User info retrieved - ID:', this.userId, 'Name:', this.userName);
+        if (callback) callback(null, data.data[0]);
+        return data.data[0];
+      } else {
+        const error = new Error('Invalid user data received');
+        if (callback) callback(error);
+        throw error;
+      }
+    } catch (err) {
+      if (callback) callback(err);
+      throw err;
+    }
+  };
+
   TwitchApi.prototype.getFollowedStreams = async function(callback) {
     if (!this.isAuthorized()) {
       const error = new Error('Not authorized');
       if (callback) callback(error);
       throw error;
+    }
+
+    // Ensure we have user ID
+    if (!this.userId) {
+      try {
+        await this.getUserInfo();
+        console.log('[SW] Got user info, userId:', this.userId);
+      } catch (err) {
+        console.log('[SW] Failed to get user info:', err.message);
+        if (callback) callback(err);
+        throw err;
+      }
     }
 
     try {

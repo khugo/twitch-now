@@ -1,9 +1,15 @@
 // Twitch Now - Minimal Service Worker for Manifest V3
 // Contains only essential background functionality
 
+console.log('[SW] Service Worker script loaded');
+console.log('[SW] Self:', JSON.stringify(self, null, 0));
+console.log('[SW] Chrome available:', typeof chrome);
+
 // Service worker global context
 const bgApp = {};
 bgApp.notificationIds = {};
+
+console.log('[SW] bgApp initialized:', JSON.stringify(bgApp, null, 0));
 
 // Storage helpers using chrome.storage.local (async)
 bgApp.get = async function(key) {
@@ -151,9 +157,14 @@ bgApp.sendNotification = async function(streamList) {
 // Basic stream monitoring
 bgApp.checkForNewStreams = async function() {
   try {
-    // Send message to popup to trigger stream check
+    // Send message to popup to trigger stream check (if popup is open)
     chrome.runtime.sendMessage({
       type: 'CHECK_STREAMS'
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        // Popup probably closed, ignore the error
+        console.log('[SW] Popup not available for stream check');
+      }
     });
   } catch (err) {
     console.error('Failed to check for new streams:', err);
@@ -168,24 +179,48 @@ bgApp.startPeriodicChecking = function() {
   });
 };
 
+// Initialize OAuth adapter
+console.log('[SW] Creating minimal twitchOauth adapter');
+const twitchOauth = OAuth2.addAdapter({
+  id: 'twitch',
+  opts: constants.twitchApi,
+  codeflow: {
+    method: "POST",
+    url: "https://api.twitch.tv/kraken/oauth2/token"
+  }
+});
+console.log('[SW] twitchOauth created:', typeof twitchOauth);
+
+// Initialize TwitchApi instance
+console.log('[SW] Creating TwitchApi instance');
+const twitchApi = new TwitchApi(constants.twitchApi.client_id);
+console.log('[SW] TwitchApi instance created:', typeof twitchApi);
+
 // Initialize service worker
 bgApp.init = function() {
-  console.log('Twitch Now service worker starting...');
+  console.log('[SW] Twitch Now service worker starting...');
+  console.log('[SW] Initializing badge, notifications, and periodic checking');
   bgApp.clearBadge();
   bgApp.bindNotificationListeners();
   bgApp.startPeriodicChecking();
+  console.log('[SW] Service worker initialization complete');
 };
 
 // Event listeners - must be registered at top level
+console.log('[SW] Registering event listeners...');
+
 chrome.runtime.onStartup.addListener(() => {
+  console.log('[SW] onStartup fired');
   bgApp.init();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
+  console.log('[SW] onInstalled fired');
   bgApp.init();
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
+  console.log('[SW] Alarm fired:', JSON.stringify(alarm, null, 0));
   if (alarm.name === 'checkStreams') {
     bgApp.checkForNewStreams();
   }
@@ -193,6 +228,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // Message handling from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('[SW] Message received:', JSON.stringify(message, null, 0));
   switch (message.type) {
     case 'GET_LIVE_STREAMS':
       // Popup is requesting current stream data
@@ -226,32 +262,106 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'IS_AUTHORIZED':
       // Check if OAuth is authorized
+      console.log('[SW] IS_AUTHORIZED request received');
+      console.log('[SW] twitchOauth available:', typeof twitchOauth);
       if (typeof twitchOauth !== 'undefined') {
+        console.log('[SW] Calling twitchOauth.isAuthorized()');
         twitchOauth.isAuthorized().then(authorized => {
+          console.log('[SW] twitchOauth.isAuthorized() result:', JSON.stringify(authorized, null, 0));
           sendResponse({ authorized: authorized });
-        }).catch(() => {
+        }).catch((error) => {
+          console.log('[SW] twitchOauth.isAuthorized() error:', JSON.stringify(error, null, 0));
           sendResponse({ authorized: false });
         });
       } else {
+        console.log('[SW] twitchOauth not available, returning false');
         sendResponse({ authorized: false });
       }
       return true; // Keep message channel open for async response
       
     case 'AUTHORIZE':
       // Trigger OAuth authorization
+      console.log('[SW] AUTHORIZE message received');
+      console.log('[SW] twitchOauth available:', typeof twitchOauth);
+      console.log('[SW] twitchOauth object:', JSON.stringify(twitchOauth, null, 0));
       if (typeof twitchOauth !== 'undefined') {
-        twitchOauth.authorize(() => {});
+        console.log('[SW] Calling twitchOauth.authorize() with callback');
+        twitchOauth.authorize((error, tokenData) => {
+          console.log('[SW] twitchOauth.authorize() callback called');
+          console.log('[SW] error:', JSON.stringify(error, null, 0));
+          console.log('[SW] tokenData:', JSON.stringify(tokenData, null, 0));
+          if (!error && tokenData) {
+            console.log('[SW] Authorization successful, token saved');
+          } else {
+            console.log('[SW] Authorization failed or cancelled');
+          }
+        });
+        console.log('[SW] twitchOauth.authorize() call completed');
+      } else {
+        console.log('[SW] twitchOauth not available - OAuth not initialized');
       }
       break;
       
     case 'REVOKE':
       // Revoke OAuth authorization
+      console.log('[SW] REVOKE message received');
       if (typeof twitchOauth !== 'undefined') {
+        console.log('[SW] Calling twitchOauth.removeData()');
         twitchOauth.removeData();
+        console.log('[SW] OAuth data removed');
+      } else {
+        console.log('[SW] twitchOauth not available for revoke');
       }
+      break;
+      
+    case 'GET_FOLLOWED_STREAMS':
+      // Handle followed streams request
+      console.log('[SW] GET_FOLLOWED_STREAMS message received');
+      
+      // First get the OAuth token and set it on TwitchApi
+      twitchOauth.getAccessToken().then(accessToken => {
+        console.log('[SW] Retrieved access token:', accessToken ? 'found' : 'not found');
+        if (accessToken) {
+          twitchApi.setToken(accessToken);
+          console.log('[SW] Set token on TwitchApi, calling getFollowedStreams');
+          
+          // Use the real TwitchApi to get followed streams
+          twitchApi.getFollowedStreams((error, data) => {
+            if (error) {
+              console.log('[SW] GET_FOLLOWED_STREAMS error:', JSON.stringify(error, null, 0));
+              sendResponse({
+                status: 'error',
+                error: error.message || 'Failed to get followed streams'
+              });
+            } else {
+              console.log('[SW] GET_FOLLOWED_STREAMS success, streams count:', data && data.data ? data.data.length : 0);
+              sendResponse({
+                status: 'ok',
+                streams: data && data.data ? data.data : [],
+                total: data && data.total ? data.total : 0
+              });
+            }
+          });
+        } else {
+          console.log('[SW] No access token available');
+          sendResponse({
+            status: 'error',
+            error: 'Not authorized - no access token'
+          });
+        }
+      }).catch(error => {
+        console.log('[SW] Error getting access token:', JSON.stringify(error, null, 0));
+        sendResponse({
+          status: 'error',
+          error: 'Failed to get access token'
+        });
+      });
+      return true; // Keep sendResponse available for async response
       break;
   }
 });
 
 // Initialize on load
+console.log('[SW] Calling bgApp.init() on load');
 bgApp.init();
+console.log('[SW] Service worker script execution complete');;
