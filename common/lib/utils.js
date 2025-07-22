@@ -11,17 +11,22 @@
   var that = {};
 
   var detectRealBrowser = function (){
-    var ua = root.navigator && root.navigator.userAgent;
+    // Guard navigator access for service worker compatibility
+    if (typeof navigator !== 'undefined' && navigator.userAgent) {
+      var ua = navigator.userAgent;
 
-    if ( /opera|opr/i.test(ua) ) {
-      return OPERA;
+      if ( /opera|opr/i.test(ua) ) {
+        return OPERA;
+      }
+      else if ( /chrome|crios|crmo/i.test(ua) ) {
+        return CHROME;
+      }
+      else if ( /firefox|iceweasel/i.test(ua) ) {
+        return FIREFOX;
+      }
     }
-    else if ( /chrome|crios|crmo/i.test(ua) ) {
-      return CHROME;
-    }
-    else if ( /firefox|iceweasel/i.test(ua) ) {
-      return FIREFOX;
-    }
+    // Default to Chrome for service worker context (Manifest V3 only)
+    return CHROME;
   }
 
   var rbrowser = that.rbrowser = detectRealBrowser();

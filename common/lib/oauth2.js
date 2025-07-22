@@ -19,19 +19,57 @@
   }
 
   var request = function (opts, callback) {
-    var $ = root.jQuery;
-    $.ajax({
-      url: opts.url,
-      type: opts.method,
-      data: opts.data
-    })
-      .always(function (data, textStatus, jqXHR) {
-        if (textStatus == "success") {
-          callback(null, data);
-        } else {
-          callback(data);
+    // Use fetch API instead of jQuery for service worker compatibility
+    if (typeof fetch !== 'undefined') {
+      var fetchOptions = {
+        method: opts.method || 'GET',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
         }
-      });
+      };
+
+      if (opts.data && opts.method === 'POST') {
+        if (typeof opts.data === 'object') {
+          var params = new URLSearchParams();
+          for (var key in opts.data) {
+            params.append(key, opts.data[key]);
+          }
+          fetchOptions.body = params.toString();
+        } else {
+          fetchOptions.body = opts.data;
+        }
+      }
+
+      fetch(opts.url, fetchOptions)
+        .then(function(response) {
+          if (response.ok) {
+            return response.json();
+          } else {
+            throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+          }
+        })
+        .then(function(data) {
+          callback(null, data);
+        })
+        .catch(function(err) {
+          callback(err);
+        });
+    } else {
+      // Fallback to jQuery if fetch is not available (for popup context)
+      var $ = root.jQuery;
+      $.ajax({
+        url: opts.url,
+        type: opts.method,
+        data: opts.data
+      })
+        .always(function (data, textStatus, jqXHR) {
+          if (textStatus == "success") {
+            callback(null, data);
+          } else {
+            callback(data);
+          }
+        });
+    }
   }
 
   var Adapter = function (id, opts, flow) {
