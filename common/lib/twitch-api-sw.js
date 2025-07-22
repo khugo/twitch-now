@@ -1,0 +1,123 @@
+// Service Worker compatible Twitch API client
+(function() {
+  "use strict";
+
+  const TwitchApi = function(clientId) {
+    if (!clientId) throw new Error("clientId is required");
+    this.basePath = "https://api.twitch.tv/helix";
+    this.userName = "";
+    this.userId = "";
+    this.clientId = clientId;
+    this.timeout = 10 * 1000;
+    this.token = "";
+    this._events = {};
+  };
+
+  // Simple event system (replaces Backbone.Events)
+  TwitchApi.prototype.on = function(event, callback) {
+    if (!this._events[event]) {
+      this._events[event] = [];
+    }
+    this._events[event].push(callback);
+  };
+
+  TwitchApi.prototype.trigger = function(event, ...args) {
+    if (this._events[event]) {
+      this._events[event].forEach(callback => callback(...args));
+    }
+  };
+
+  TwitchApi.prototype.isAuthorized = function() {
+    return !!this.token;
+  };
+
+  TwitchApi.prototype.authorize = function() {
+    if (typeof twitchOauth !== 'undefined') {
+      twitchOauth.authorize(() => {});
+    }
+  };
+
+  TwitchApi.prototype.revoke = function() {
+    if (this.token && this.token.length > 0 && typeof twitchOauth !== 'undefined') {
+      twitchOauth.removeData();
+    }
+  };
+
+  TwitchApi.prototype.getRequestParams = function() {
+    return {
+      timeout: this.timeout,
+      headers: {
+        "Accept": "application/json",
+        "Client-ID": this.clientId,
+        "Authorization": "Bearer " + this.token
+      }
+    };
+  };
+
+  TwitchApi.prototype.setToken = function(accessToken) {
+    this.token = accessToken;
+    this.trigger("tokenchange", accessToken);
+  };
+
+  TwitchApi.prototype.send = async function(endpoint, params, callback) {
+    if (typeof params === 'function') {
+      callback = params;
+      params = {};
+    }
+
+    const requestParams = this.getRequestParams();
+    let url = `${this.basePath}/${endpoint}`;
+
+    // Add query parameters
+    if (params && Object.keys(params).length > 0) {
+      const searchParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        searchParams.append(key, value);
+      }
+      url += '?' + searchParams.toString();
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: requestParams.headers,
+        signal: AbortSignal.timeout(this.timeout)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (callback) callback(null, data);
+      return data;
+    } catch (err) {
+      console.error('Twitch API error:', err);
+      if (callback) callback(err);
+      throw err;
+    }
+  };
+
+  TwitchApi.prototype.getFollowedStreams = async function(callback) {
+    if (!this.isAuthorized()) {
+      const error = new Error('Not authorized');
+      if (callback) callback(error);
+      throw error;
+    }
+
+    try {
+      const data = await this.send('streams/followed', { user_id: this.userId });
+      if (callback) callback(null, data);
+      return data;
+    } catch (err) {
+      if (callback) callback(err);
+      throw err;
+    }
+  };
+
+  // Make TwitchApi available globally
+  if (typeof self !== 'undefined') {
+    self.TwitchApi = TwitchApi;
+  }
+
+}).call(this);

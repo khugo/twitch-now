@@ -78,6 +78,22 @@ gulp.task('concat:popupjs', function () {
     .pipe(gulp.dest('common/dist/'));
 })
 
+gulp.task('concat:serviceworker', function () {
+  return gulp.src([
+    "chrome/common/lib/constants.js",
+    "common/dist/contributors.js",
+    "common/lib/3rd/eventemitter.js",
+    "common/lib/utils-sw.js",
+    "common/lib/oauth2-sw.js",
+    "chrome/background.js",
+    "common/lib/twitch-api-sw.js",
+    "common/lib/onerror-sw.js",
+    "chrome/service-worker.js"
+  ])
+    .pipe(concat('service-worker.js'))
+    .pipe(gulp.dest('build/chrome/'));
+});
+
 gulp.task('concat:popupcss', function () {
   return gulp.src([
     "common/css/reset.css",
@@ -184,6 +200,7 @@ gulp.task('chrome', gulp.series('clean:chrome',
   'contributors',
   'concat:popupcss',
   'concat:popupjs',
+  'concat:serviceworker',
   'copy:chrome', function (done) {
     done();
   }));
