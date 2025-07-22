@@ -1,10 +1,15 @@
 # Twitch Now
 
-* Chrome version: https://chrome.google.com/webstore/detail/twitch-now/nlmbdmpjmlijibeockamioakdpmhjnpk
-* Firefox version: https://addons.mozilla.org/firefox/addon/twitch-now/
-* Opera version: https://addons.opera.com/extensions/details/twitch-now/
+> [!NOTE]
+> This is a minimal fork of the original [Twitch Now](https://github.com/twitchnow/twitchnow) extension to migrate it to Chrome Manifest V3. Only Chrome is supported, and it's possible some of the features do not work.
 
-## Requirements
+## Installing
+
+Download the repository and unzip it. Then navigate to `chrome://extensions/` in your browser and enable developer mode. Click on "Load unpacked" and select the `build/chrome` directory.
+
+Open the extension and click on Login.
+
+## Development
 
 * Node.js
 * Gulp
@@ -16,32 +21,9 @@ Before all, you need to install dependencies:
 $ npm install
 ```
 
-To build Chrome version:
+Build:
 ```
-$ gulp chrome
-```
-
-To build Firefox version:
-```
-$ gulp firefox
+$ npx gulp chrome
 ```
 
-To run Firefox version:
-```
-$ run firefox, goto about:debugging, then load build/firefox/manifest.json
-```
-
-To build Opera version:
-```
-$ gulp opera
-```
-
-## Translation guide
-
-This guide will help you to get prepared for translation. Let's start!
-
-1.  Register your account first. 
-2.  Visit the project page again and choose "Fork" option available in top-right corner. This will copy whole repository to your account.
-3.  Hit plus icon to create new translation file in "_locales" directory. If your language directory does not exists yet, feel free to create one (https://developer.chrome.com/webstore/i18n#localeTable)
-4.  When you're done, you can now commit and push your changes. The new files will appear on you Github account.
-5.  You're almost done. The only thing left is to create a pull request so I can see that you want to apply your changes. To do it, press the "Pull request" button. Make sure, the target repository is correct and press "Send pull request"
+Then navigate to `chrome://extensions/` in your browser and enable developer mode. Click on "Load unpacked" and select the `build/chrome` directory.
