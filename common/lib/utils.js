@@ -101,6 +101,88 @@
     
     // Manifest V3 - create a proxy object for service worker communication
     var dispatcher = _.extend({}, Backbone.Events);
+    
+    // Create a Stream model proxy with essential methods
+    var StreamModel = Backbone.Model.extend({
+      defaults: {
+        created_at: Date.now()
+      },
+      
+      initialize: function () {
+        var channelName = this.get("user_name");
+        var streamType = this.get("type");
+        var isVodcast = ['rerun', 'watch_party'].includes(streamType);
+        this.set({
+          vodcast: isVodcast,
+          name: channelName
+        }, { silent: true });
+      },
+      
+      baseUrl: function() {
+        return "https://www.twitch.tv";
+      },
+      
+      getStreamURL: function (type) {
+        // Get settings from backgroundProxy
+        type = type || (backgroundProxy.settings && backgroundProxy.settings.get("openStreamIn") ? 
+                       backgroundProxy.settings.get("openStreamIn").get("value") : "newlayout");
+        
+        if (type == "html5") {
+          return "http://player.twitch.tv/?channel=" + this.get("user_login") + "&html5" + "&parent=twitch-now";
+        }
+        var links = {
+          theatrelayout: "/ID?mode=theatre",
+          newlayout: "/ID",
+          popout: "/ID/popout"
+        };
+        
+        return this.baseUrl() + links[type].replace(/ID/, this.get("user_login"));
+      },
+      
+      openStream: function (type) {
+        if (type == "livestreamer") {
+          // For livestreamer, just log for now since it requires complex setup
+          console.log('[DEBUG] Livestreamer not implemented in MV3');
+        } else {
+          var url = this.getStreamURL(type);
+          utils.tabs.create({ url: url });
+        }
+      },
+      
+      openChat: function () {
+        var openIn = backgroundProxy.settings && backgroundProxy.settings.get("openChatIn") ? 
+                    backgroundProxy.settings.get("openChatIn").get("value") : "newwindow";
+        var href = this.baseUrl() + "/popout/ID/chat?popout=".replace(/ID/, this.get("user_login"));
+        
+        if (openIn == "newwindow") {
+          utils.windows.create({ url: href, width: 400 });
+        } else {
+          utils.tabs.create({ url: href });
+        }
+      },
+      
+      openMultitwitch: function () {
+        var self = this;
+        var url = "http://multitwitch.tv";
+        var updatedTabUrl;
+        utils.tabs.query({}, function (tabs) {
+          tabs = tabs.filter(function (t) {
+            return /https*:\/\/(www\.)*multitwitch\.tv/.test(t.url);
+          });
+          
+          if (tabs.length) {
+            var tab = tabs[tabs.length - 1];
+            var tabUrl = tab.url;
+            updatedTabUrl = tabUrl + "/" + self.get("user_login");
+            utils.tabs.update(tab.id, { url: updatedTabUrl });
+          } else {
+            updatedTabUrl = url + "/" + self.get("user_login");
+            utils.tabs.create({ url: updatedTabUrl, active: false });
+          }
+        });
+      }
+    });
+    
     var backgroundProxy = {
       dispatcher: dispatcher,
       // Create proxy objects for background functions
@@ -193,6 +275,7 @@
       followedgames: new Backbone.Collection(),
       followedChannels: new Backbone.Collection(),
       topstreams: _.extend(new Backbone.Collection(), {
+        model: StreamModel,
         update: function() {
           console.log('[DEBUG] topstreams collection update() called');
           chrome.runtime.sendMessage({ 
@@ -215,6 +298,7 @@
       }),
       videos: new Backbone.Collection(),
       search: _.extend(new Backbone.Collection(), {
+        model: StreamModel,
         query: null,
         update: function() {
           console.log('[DEBUG] search collection update() called with query:', this.query);
@@ -267,7 +351,17 @@
       settings: (() => {
         // Create a proxy for the Settings collection since we can't access app.js directly
         // The actual Settings collection needs to be populated with default settings
-        const settingsProxy = new Backbone.Collection();
+        const settingsProxy = _.extend(new Backbone.Collection(), {
+          // Add storage functionality like the original Settings collection
+          saveToStorage: function() {
+            chrome.storage.local.set({ 'settings': this.toJSON() });
+          },
+          
+          getNotificationSoundSource: function() {
+            var val = this.get("notificationSound").get("value");
+            return val == "customsound" ? localStorage["customSound"] : val;
+          }
+        });
         
         // Complete default settings from app.js - maintaining full functionality
         const defaultSettings = [
@@ -538,9 +632,36 @@
           }
         ];
         
-        // Add models to the collection
+        // Add default models to the collection first
         defaultSettings.forEach(setting => {
           settingsProxy.add(new Backbone.Model(setting));
+        });
+        
+        // Load stored settings and apply them
+        chrome.storage.local.get(['settings'], (result) => {
+          const storedSettings = result.settings || [];
+          console.log('[DEBUG] Loaded stored settings:', storedSettings.length, 'items');
+          
+          // Apply stored values to existing models
+          settingsProxy.forEach(function(control) {
+            const saved = storedSettings.find(function(storedControl) {
+              return storedControl.id === control.get("id");
+            });
+            
+            if (saved && saved.hasOwnProperty("value")) {
+              console.log('[DEBUG] Restoring setting:', saved.id, '=', saved.value);
+              control.set("value", saved.value);
+            }
+          });
+          
+          // Save current state and set up change listener
+          settingsProxy.saveToStorage();
+        });
+        
+        // Listen for changes and save to storage
+        settingsProxy.on("change", function() {
+          console.log('[DEBUG] Settings changed, saving to storage');
+          settingsProxy.saveToStorage();
         });
         
         console.log('[DEBUG] Settings collection initialized with', settingsProxy.length, 'settings');
@@ -551,6 +672,7 @@
       liveStreams: new Backbone.Collection(),
       featuredStreams: new Backbone.Collection(),
       gameStreams: _.extend(new Backbone.Collection(), {
+        model: StreamModel,
         game: null,
         gameid: null,
         initialize: function() {
@@ -591,6 +713,7 @@
       }),
       gameVideos: new Backbone.Collection(),
       following: _.extend(new Backbone.Collection(), {
+        model: StreamModel,
         update: function() {
           console.log('[DEBUG] following collection update() called');
           console.log('[DEBUG] this in update - has trigger method:', typeof this.trigger);
