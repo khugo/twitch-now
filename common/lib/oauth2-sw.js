@@ -6,7 +6,6 @@
 
   that._adapters = {};
 
-  // Replace jQuery AJAX with fetch API
   const request = function (opts, callback) {
     const fetchOptions = {
       method: opts.method || 'GET',
@@ -130,12 +129,10 @@
     return adapter;
   };
 
-  // Make OAuth2 available globally
   if (typeof self !== 'undefined') {
     self.OAuth2 = that;
   }
   
-  // Also make it available in global scope for service worker
   if (typeof globalThis !== 'undefined') {
     globalThis.OAuth2 = that;
   }

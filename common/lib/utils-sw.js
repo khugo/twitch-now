@@ -3,10 +3,8 @@
   const that = {};
   const CHROME = "chrome";
   
-  // Browser detection (Chrome only for Manifest V3)
   that.rbrowser = CHROME;
 
-  // Chrome extension APIs wrappers
   const _browserAction = that.browserAction = {};
   _browserAction.setBadgeText = function(opts) {
     if (chrome.action && chrome.action.setBadgeText) {
@@ -24,7 +22,6 @@
     return !!(chrome.notifications && chrome.notifications.create);
   };
 
-  // Make utils available globally
   if (typeof self !== 'undefined') {
     self.utils = that;
   }

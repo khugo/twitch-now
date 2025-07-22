@@ -180,7 +180,6 @@
       if (authorized) {
         app.twitchApi.trigger('authorize');
         
-        // Also trigger collection updates
         if (b.following && b.following.update) {
           b.following.update();
         }
@@ -340,11 +339,9 @@
         // Add callback to check what happens after authorization
         if (app.twitchApi.on) {
           app.twitchApi.on('authorize', function() {
-            // Authorization successful
           });
           
           app.twitchApi.on('change:authorized', function() {
-            // Authorization state changed
           });
         } else {
         }
@@ -413,7 +410,6 @@
     },
     selectTab    : function (e){
       this.$el.find(".menu-btn").removeClass("active");
-//      this.$el.find(".menu-btn[data-route=" + route + "]").addClass("active");
       $(e.target).closest(".menu-btn").addClass("active");
     }
   });
@@ -481,7 +477,6 @@
       
       LazyRenderView.prototype.initialize.apply(this, arguments);
       
-      // Check if settings exist before trying to access them
       var defaultTab = this.collection.get("defaultTab");
       var themeType = this.collection.get("themeType");
       var simpleView = this.collection.get("simpleView");
@@ -490,7 +485,6 @@
       if (defaultTab) {
         this.setDefaultTab(defaultTab.get("value"));
       } else {
-        // Default to following tab if no setting is found
         this.setDefaultTab("following");
       }
       if (themeType) {
@@ -647,7 +641,6 @@
     },
 
     openStream: function (e){
-      // Open stream on left and middle click
       const canOpenStreamTab = e.which <= 2;
       if (canOpenStreamTab) {
         this.model.openStream();
@@ -736,7 +729,6 @@
       this.messages = $.extend({}, this.messages, opts.messages);
       this.currentMessage = null;
       
-      // Use opts.collection instead of this.collection since Backbone hasn't set it yet
       var collection = opts.collection || this.collection;
       
       if (!collection) {
@@ -862,7 +854,6 @@
       this.$undoMessage.css({visibility: "hidden"});
     },
     onshow   : function (){
-      //update once on view show if not updated before
       if ( !this.collection.length ) {
         this.update();
       }
@@ -932,7 +923,6 @@
       this.listenTo(app.twitchApi, "authorize", function (){
         this.$loadBtn.removeClass('hide');
         
-        // Try to trigger an update of the collection after authorization
         if (this.collection && this.collection.update) {
           this.collection.update();
         } else {

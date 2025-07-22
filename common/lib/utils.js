@@ -119,7 +119,6 @@
       },
       
       getStreamURL: function (type) {
-        // Get settings from backgroundProxy
         type = type || (backgroundProxy.settings && backgroundProxy.settings.get("openStreamIn") ? 
                        backgroundProxy.settings.get("openStreamIn").get("value") : "newlayout");
         
@@ -137,7 +136,6 @@
       
       openStream: function (type) {
         if (type == "livestreamer") {
-          // For livestreamer, just log for now since it requires complex setup
           console.log('Livestreamer not supported in Manifest V3');
         } else {
           var url = this.getStreamURL(type);
@@ -189,13 +187,11 @@
       
       initialize: function() {
         var self = this;
-        // Event listeners will be set up after backgroundProxy is created
       },
       
       setupEventListeners: function(twitchApi) {
         var self = this;
         
-        // Check if user is already authorized
         twitchApi.isAuthorized().then(function(authorized) {
           if (authorized) {
             self.set("authenticated", true);
@@ -203,7 +199,6 @@
           }
         });
         
-        // Listen for authorize events from twitchApi
         twitchApi.on("authorize", function() {
           self.set("authenticated", true);
           self.populateUserInfo();
@@ -221,7 +216,6 @@
       populateUserInfo: function() {
         var self = this;
         
-        // Send message to service worker to get user info
         chrome.runtime.sendMessage({
           type: 'GET_USER_INFO'
         }, function(response) {
@@ -261,19 +255,15 @@
       initialize: function() {
         var self = this;
         
-        // Listen for count changes and update badge
         self.on("change:count", function() {
-          // Check if showBadge setting is enabled
           if (backgroundProxy.settings && backgroundProxy.settings.get("showBadge") && 
               backgroundProxy.settings.get("showBadge").get("value")) {
-            // Send STREAMS_UPDATED message to service worker
             chrome.runtime.sendMessage({
               type: 'STREAMS_UPDATED',
               liveCount: self.get("count"),
               newStreams: [] // For now, we'll handle new stream notifications separately
             });
           } else {
-            // Clear badge if showBadge is disabled
             chrome.runtime.sendMessage({ type: 'CLEAR_BADGE' });
           }
         });
@@ -281,7 +271,6 @@
       
       onShowBadgeChange: function(value) {
         if (value) {
-          // Re-trigger badge update
           this.trigger("change:count");
         } else {
           chrome.runtime.sendMessage({ type: 'CLEAR_BADGE' });
@@ -291,7 +280,6 @@
     
     var backgroundProxy = {
       dispatcher: dispatcher,
-      // Create proxy objects for background functions
       bgApp: {
         setBadge: function(text) {
           chrome.runtime.sendMessage({ type: 'SET_BADGE', text: text });
@@ -303,7 +291,6 @@
           chrome.runtime.sendMessage({ type: 'SEND_NOTIFICATION', streams: streams });
         }
       },
-      // Proxy for twitchApi - make it compatible with existing popup code
       twitchApi: _.extend({
         isAuthorized: function() {
           return new Promise((resolve) => {
@@ -316,8 +303,6 @@
           chrome.runtime.sendMessage({ type: 'AUTHORIZE' }, (response) => {
           });
           
-          // After sending authorize message, we should listen for completion
-          // and trigger the authorize event for the popup
           let pollCount = 0;
           const maxPolls = 30; // Poll for 30 seconds max
           const pollForAuth = () => {
@@ -326,13 +311,11 @@
               if (authorized) {
                 this.trigger('authorize');
                 
-                // Update stream collections after authorization
                 if (backgroundProxy.following && backgroundProxy.following.update) {
                   backgroundProxy.following.update();
                 } else {
                 }
               } else if (pollCount < maxPolls) {
-                // Keep polling for a short time
                 setTimeout(pollForAuth, 1000);
               } else {
                 console.log('Authentication timeout - please try again');
@@ -345,14 +328,12 @@
             });
           };
           
-          // Start polling after a short delay to allow service worker to process
           setTimeout(pollForAuth, 2000);
         },
         revoke: function() {
           chrome.runtime.sendMessage({ type: 'REVOKE' }, (response) => {
           });
         },
-        // Add other properties that popup code expects
         token: '',
         userName: '',
         userId: '',
@@ -360,7 +341,6 @@
         basePath: "https://api.twitch.tv/helix",
         timeout: 10 * 1000
       }, Backbone.Events),
-      // Add Backbone collections that popup views expect
       notifications: new Backbone.Collection(),
       followedgames: new Backbone.Collection(),
       followedChannels: new Backbone.Collection(),
@@ -423,8 +403,7 @@
         // Create a proxy for the Settings collection with persistence
         // The actual Settings collection needs to be populated with default settings
         const settingsProxy = _.extend(new Backbone.Collection(), {
-          // Add storage functionality like the original Settings collection
-          saveToStorage: function() {
+            saveToStorage: function() {
             chrome.storage.local.set({ 'settings': this.toJSON() });
           },
           
@@ -703,16 +682,13 @@
           }
         ];
         
-        // Add default models to the collection first
         defaultSettings.forEach(setting => {
           settingsProxy.add(new Backbone.Model(setting));
         });
         
-        // Load stored settings and apply them
         chrome.storage.local.get(['settings'], (result) => {
           const storedSettings = result.settings || [];
           
-          // Apply stored values to existing models
           settingsProxy.forEach(function(control) {
             const saved = storedSettings.find(function(storedControl) {
               return storedControl.id === control.get("id");
@@ -723,16 +699,13 @@
             }
           });
           
-          // Save current state and set up change listener
           settingsProxy.saveToStorage();
         });
         
-        // Listen for changes and save to storage
         settingsProxy.on("change", function() {
           settingsProxy.saveToStorage();
         });
         
-        // Listen for showBadge setting changes
         settingsProxy.on("change", function(model) {
           if (model.get("id") === "showBadge") {
             if (backgroundProxy.badge) {
@@ -752,7 +725,6 @@
         game: null,
         gameid: null,
         initialize: function() {
-          // Listen for gameLobby:change events
           dispatcher.on("gameLobby:change", function(gameName, gameId) {
             this.game = gameName;
             this.gameid = gameId;
@@ -783,23 +755,18 @@
         model: StreamModel,
         
         initialize: function() {
-          // Listen for collection changes and update badge count
           this.on("add update remove reset", function() {
             backgroundProxy.badge.set("count", this.length);
           });
         },
         
         update: function() {
-          // In the real app, this would make API calls to get followed streams
-          // For now, we'll send a message to service worker to handle this
           chrome.runtime.sendMessage({ 
             type: 'GET_FOLLOWED_STREAMS' 
           }, (response) => {
             
-            // Parse response and add streams to collection
             if (response && response.status === 'ok' && response.streams) {
               
-              // Clear existing models and add new ones - this should automatically trigger render
               this.reset(response.streams);
             } else {
               this.reset([]); // Clear collection if no streams
@@ -814,7 +781,6 @@
         lastChange: 0,
         change: function(gameName) {
           
-          // Find game in games or followedgames collections
           var newGame = null;
           if (backgroundProxy.games && backgroundProxy.games.find) {
             newGame = backgroundProxy.games.find(function(g) {
@@ -838,7 +804,6 @@
               this.set(newGame.toJSON ? newGame.toJSON() : newGame.attributes);
               this.lastChange = currentTime;
               
-              // Trigger dispatcher events for game lobby collections to update
               var gameId = newGame.get ? newGame.get('id') : newGame.attributes.id;
               dispatcher.trigger("gameLobby:change", gameName, gameId);
             }
@@ -849,7 +814,6 @@
       user: new UserModel()
     };
     
-    // Initialize collections that have initialize methods
     if (backgroundProxy.gameStreams && backgroundProxy.gameStreams.initialize) {
       backgroundProxy.gameStreams.initialize();
     }
@@ -857,22 +821,18 @@
       backgroundProxy.following.initialize();
     }
     
-    // Set up user model with twitchApi reference and event listeners
     if (backgroundProxy.user && backgroundProxy.user.setupEventListeners) {
       backgroundProxy.user.setTwitchApi(backgroundProxy.twitchApi);
       backgroundProxy.user.setupEventListeners(backgroundProxy.twitchApi);
     }
     
-    // Listen for background stream updates from service worker
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.type === 'BACKGROUND_STREAMS_UPDATED') {
         
-        // Update badge count to match service worker
         if (backgroundProxy.badge) {
           backgroundProxy.badge.set("count", message.streamCount);
         }
         
-        // Optionally update following collection if popup is open
         if (message.streams && backgroundProxy.following) {
           backgroundProxy.following.reset(message.streams);
         }
@@ -880,7 +840,6 @@
         // Handle token expiration from service worker
         console.log('Authentication expired - please log in again');
         
-        // Update user model to reflect expired authentication
         if (backgroundProxy.user) {
           backgroundProxy.user.set({
             "authenticated": false,
@@ -889,12 +848,10 @@
           });
         }
         
-        // Clear following collection since user is no longer authenticated
         if (backgroundProxy.following) {
           backgroundProxy.following.reset([]);
         }
         
-        // Clear badge count
         if (backgroundProxy.badge) {
           backgroundProxy.badge.set("count", 0);
         }

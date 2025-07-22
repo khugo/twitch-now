@@ -3,12 +3,10 @@
 
 console.log('[SW] Service Worker script loaded');
 
-// Service worker global context
 const bgApp = {};
 bgApp.notificationIds = {};
 
 
-// Storage helpers using chrome.storage.local (async)
 bgApp.get = async function(key) {
   return new Promise(resolve => {
     chrome.storage.local.get([key], result => {
@@ -33,7 +31,6 @@ bgApp.del = async function(...keys) {
   });
 };
 
-// Badge management
 bgApp.setBadge = function(text) {
   text += "";
   text = text === "0" ? "" : text;
@@ -46,18 +43,15 @@ bgApp.clearBadge = function() {
   bgApp.setBadge("");
 };
 
-// Rich notifications support check
 bgApp.richNotificationsSupported = function() {
   return chrome.notifications && chrome.notifications.create;
 };
 
-// Notification listeners
 bgApp.bindNotificationListeners = function() {
   if (bgApp.richNotificationsSupported()) {
     chrome.notifications.onClicked.addListener(function(notificationId) {
       const streamData = bgApp.notificationIds[notificationId];
       if (streamData) {
-        // Open stream in new tab
         chrome.tabs.create({
           url: `https://www.twitch.tv/${streamData.name}`
         });
@@ -71,7 +65,6 @@ bgApp.bindNotificationListeners = function() {
   }
 };
 
-// Download image as blob for notifications
 bgApp.downloadImageAsBlob = async function(url, type) {
   try {
     const response = await fetch(url);
@@ -96,7 +89,6 @@ bgApp.sendNotification = async function(streamList) {
 
   let delay = 0;
   
-  // Show individual notifications for first few streams
   for (let i = 0; i < streamsToShow.length; i++) {
     const stream = streamsToShow[i];
     const notificationId = `TwitchNow.Notification.${Date.now()}.${i}`;
@@ -107,7 +99,6 @@ bgApp.sendNotification = async function(streamList) {
         iconUrl = await bgApp.downloadImageAsBlob(stream.profile_image_url, "image/png");
       }
     } catch (e) {
-      // Use default icon if download fails
     }
 
     const opt = {
@@ -126,7 +117,6 @@ bgApp.sendNotification = async function(streamList) {
     delay += 1000;
   }
 
-  // Show summary notification for remaining streams
   if (streamsOther.length > 0) {
     const notificationId = `TwitchNow.Notification.${Date.now()}.summary`;
     const streamNames = streamsOther.map(s => s.name).slice(0, 3);
@@ -155,16 +145,13 @@ bgApp.sendNotification = async function(streamList) {
 bgApp.checkForNewStreams = async function() {
   try {
     
-    // Get access token first
     const accessToken = await twitchOauth.getAccessToken();
     if (!accessToken) {
       return;
     }
     
-    // Set token and get followed streams directly from service worker
     twitchApi.setToken(accessToken);
     
-    // Use callback style for better error handling
     twitchApi.getFollowedStreams(async (error, data) => {
       if (bgApp.handleAuthError(error)) return; // DRY auth handling
       if (error) {
@@ -174,7 +161,6 @@ bgApp.checkForNewStreams = async function() {
       
       const streamCount = data && data.data ? data.data.length : 0;
       
-      // Check if showBadge setting is enabled
       const settings = await bgApp.get('settings') || [];
       const showBadgeSetting = settings.find(s => s.id === 'showBadge');
       const showBadge = showBadgeSetting ? showBadgeSetting.value : true; // Default to true
@@ -185,14 +171,12 @@ bgApp.checkForNewStreams = async function() {
         bgApp.clearBadge();
       }
       
-      // Optionally send message to popup if it's open
       chrome.runtime.sendMessage({
         type: 'BACKGROUND_STREAMS_UPDATED',
         streamCount: streamCount,
         streams: data && data.data ? data.data : []
       }, (response) => {
         if (chrome.runtime.lastError) {
-          // Popup probably closed, ignore the error
         }
       });
     });
@@ -202,7 +186,6 @@ bgApp.checkForNewStreams = async function() {
   }
 };
 
-// Periodic checking using chrome.alarms
 bgApp.startPeriodicChecking = function() {
   chrome.alarms.create('checkStreams', {
     delayInMinutes: 0.1, // First check in 6 seconds (0.1 minutes)
@@ -214,20 +197,16 @@ bgApp.startPeriodicChecking = function() {
 bgApp.handleAuthError = function(error) {
   if (error && error.message && error.message.includes('401')) {
     
-    // Clear the token
     if (typeof twitchOauth !== 'undefined') {
       twitchOauth.removeData();
     }
     
-    // Clear badge since user is no longer authenticated
     bgApp.clearBadge();
     
-    // Notify popup that authentication expired
     chrome.runtime.sendMessage({
       type: 'AUTH_EXPIRED'
     }, (response) => {
       if (chrome.runtime.lastError) {
-        // Popup not available
       }
     });
     
@@ -236,7 +215,6 @@ bgApp.handleAuthError = function(error) {
   return false; // Not an auth error
 };
 
-// Initialize OAuth adapter
 const twitchOauth = OAuth2.addAdapter({
   id: 'twitch',
   opts: constants.twitchApi,
@@ -246,22 +224,18 @@ const twitchOauth = OAuth2.addAdapter({
   }
 });
 
-// Initialize TwitchApi instance
 const twitchApi = new TwitchApi(constants.twitchApi.client_id);
 
 // Initialize service worker
 bgApp.init = function() {
   console.log('[SW] Service worker initializing...');
   
-  // Don't clear badge immediately - let the stream check determine correct state
   bgApp.bindNotificationListeners();
   bgApp.startPeriodicChecking();
   
-  // Perform immediate check for live streams on startup
   bgApp.checkForNewStreams();
 };
 
-// Event listeners - must be registered at top level
 
 chrome.runtime.onStartup.addListener(() => {
   bgApp.init();
@@ -277,17 +251,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-// Message handling from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
     case 'GET_LIVE_STREAMS':
-      // Popup is requesting current stream data
-      // Service worker doesn't maintain stream data, popup handles this
       sendResponse({status: 'ok'});
       break;
       
     case 'STREAMS_UPDATED':
-      // Popup is informing us of updated stream data
       const { liveCount, newStreams } = message;
       bgApp.setBadge(liveCount);
       
@@ -311,7 +281,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
       
     case 'IS_AUTHORIZED':
-      // Check if OAuth is authorized
       if (typeof twitchOauth !== 'undefined') {
         twitchOauth.isAuthorized().then(authorized => {
           sendResponse({ authorized: authorized });
@@ -324,28 +293,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true; // Keep message channel open for async response
       
     case 'AUTHORIZE':
-      // Trigger OAuth authorization
       if (typeof twitchOauth !== 'undefined') {
         twitchOauth.authorize((error, tokenData) => {
-          // Authorization complete
         });
       }
       break;
       
     case 'REVOKE':
-      // Revoke OAuth authorization
       if (typeof twitchOauth !== 'undefined') {
         twitchOauth.removeData();
       }
       break;
       
     case 'GET_FOLLOWED_STREAMS':
-      // Handle followed streams request
       twitchOauth.getAccessToken().then(accessToken => {
         if (accessToken) {
           twitchApi.setToken(accessToken);
           
-          // Use the real TwitchApi to get followed streams
           twitchApi.getFollowedStreams((error, data) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
@@ -377,12 +341,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
       
     case 'GET_TOP_GAMES':
-      // Handle top games request
       twitchOauth.getAccessToken().then(accessToken => {
         if (accessToken) {
           twitchApi.setToken(accessToken);
           
-          // Use the TwitchApi to get top games
           twitchApi.getTopGames((error, data) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
@@ -414,12 +376,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
       
     case 'GET_GAME_STREAMS':
-      // Handle game streams request
       twitchOauth.getAccessToken().then(accessToken => {
         if (accessToken) {
           twitchApi.setToken(accessToken);
           
-          // Use the TwitchApi to get streams for the game
           twitchApi.getGameStreams(message.gameId, (error, data) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
@@ -451,12 +411,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
       
     case 'GET_TOP_STREAMS':
-      // Handle top streams request
       twitchOauth.getAccessToken().then(accessToken => {
         if (accessToken) {
           twitchApi.setToken(accessToken);
           
-          // Use the TwitchApi to get top streams
           twitchApi.getTopStreams((error, data) => {
             if (bgApp.handleAuthError(error)) return; // DRY auth handling
             if (error) {
@@ -488,7 +446,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
       
     case 'SEARCH_STREAMS':
-      // Handle search streams request
       if (!message.query) {
         sendResponse({
           status: 'error',
@@ -497,7 +454,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
       
-      // Get OAuth token and call TwitchApi
       twitchOauth.getAccessToken().then(accessToken => {
         if (accessToken) {
           twitchApi.setToken(accessToken);
@@ -534,7 +490,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
       
     case 'GET_USER_INFO':
-      // Handle user info request
       twitchOauth.getAccessToken().then(accessToken => {
         if (accessToken) {
           twitchApi.setToken(accessToken);
