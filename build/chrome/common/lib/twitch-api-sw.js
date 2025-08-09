@@ -13,7 +13,6 @@
     this._events = {};
   };
 
-  // Simple event system (replaces Backbone.Events)
   TwitchApi.prototype.on = function(event, callback) {
     if (!this._events[event]) {
       this._events[event] = [];
@@ -59,7 +58,6 @@
     this.trigger("tokenchange", accessToken);
   };
 
-  // Helper function to process stream thumbnail URLs
   TwitchApi.prototype.processStreamThumbnails = function(data) {
     if (data && data.data && data.data.length) {
       data.data = data.data.map(function(s) {
@@ -82,7 +80,6 @@
     const requestParams = this.getRequestParams();
     let url = `${this.basePath}/${endpoint}`;
 
-    // Add query parameters
     if (params && Object.keys(params).length > 0) {
       const searchParams = new URLSearchParams();
       for (const [key, value] of Object.entries(params)) {
@@ -100,8 +97,6 @@
 
       if (!response.ok) {
         if (response.status === 401) {
-          // Token expired or invalid - trigger revocation
-          console.log('[SW API] 401 Unauthorized - token expired, revoking');
           // Note: We can't directly access twitchOauth here, so we'll throw a specific error
           throw new Error(`HTTP 401: Token expired or invalid`);
         }
@@ -130,7 +125,6 @@
       if (data && data.data && data.data[0]) {
         this.userId = data.data[0].id;
         this.userName = data.data[0].display_name;
-        console.log('[SW] User info retrieved - ID:', this.userId, 'Name:', this.userName);
         if (callback) callback(null, data.data[0]);
         return data.data[0];
       } else {
@@ -151,13 +145,10 @@
       throw error;
     }
 
-    // Ensure we have user ID
     if (!this.userId) {
       try {
         await this.getUserInfo();
-        console.log('[SW] Got user info, userId:', this.userId);
       } catch (err) {
-        console.log('[SW] Failed to get user info:', err.message);
         if (callback) callback(err);
         throw err;
       }
@@ -185,7 +176,6 @@
     try {
       const data = await this.send('games/top');
       
-      // Process response similar to existing Games collection
       if (data && data.data) {
         data.data = Array.isArray(data.data) ? data.data : [];
         data.data.forEach(function (g) {
@@ -260,14 +250,11 @@
     }
 
     try {
-      // Use search/channels endpoint as that's what actually exists
       const data = await this.send('search/channels', { query: searchQuery });
       
-      // Filter only live channels and transform to match stream format
       if (data && data.data) {
         const liveChannels = data.data.filter(channel => channel.is_live);
         
-        // Transform channel data to match stream format expected by the UI
         const transformedStreams = liveChannels.map(channel => ({
           id: channel.id,
           user_id: channel.id,
@@ -283,7 +270,6 @@
           thumbnail_url: `https://static-cdn.jtvnw.net/previews-ttv/live_user_${channel.broadcaster_login}-{width}x{height}.jpg`,
           tag_ids: [],
           is_mature: false,
-          // Additional channel-specific fields
           name: channel.display_name,
           display_name: channel.display_name,
           profile_image_url: ''
@@ -294,7 +280,6 @@
           pagination: data.pagination || {}
         };
         
-        // Process thumbnails using existing function
         const finalData = this.processStreamThumbnails(processedData);
         
         if (callback) callback(null, finalData);
@@ -310,7 +295,6 @@
     }
   };
 
-  // Make TwitchApi available globally
   if (typeof self !== 'undefined') {
     self.TwitchApi = TwitchApi;
   }
